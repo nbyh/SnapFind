@@ -1,0 +1,12 @@
+[package]
+name = "snapfind-ipc-client"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+snapfind-core = { path = "../snapfind-core" }
+tokio = { workspace = true, features = ["rt-multi-thread", "net", "io-util", "sync", "time", "macros"] }
+serde_json.workspace = true
+anyhow.workspace = true
+rand.workspace = true

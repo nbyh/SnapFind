@@ -1,0 +1,93 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:SnapFind.Desktop.ViewModels"
+             x:Class="SnapFind.Desktop.Views.SetupView"
+             x:DataType="vm:SetupViewModel">
+
+  <ScrollViewer>
+    <StackPanel Margin="36,28,36,28" Spacing="12" MaxWidth="980" HorizontalAlignment="Center">
+
+      <TextBlock Text="欢迎使用 SnapFind" Classes="title" />
+      <TextBlock Classes="caption" TextWrapping="Wrap"
+                 Text="开源、轻量、本地优先的全文搜索。索引与搜索全部在本机完成，不联网、不上传。" />
+
+      <Border Classes="card" IsVisible="{Binding HasDegraded}" BorderBrush="{DynamicResource Warn}">
+        <TextBlock Text="{Binding DegradedReason}" FontSize="12.5"
+                   Foreground="{DynamicResource Warn}" TextWrapping="Wrap" />
+      </Border>
+
+      <!-- 1 范围 -->
+      <Border Classes="card">
+        <StackPanel Spacing="8">
+          <TextBlock Text="1 · 选择要索引的范围" Classes="section" />
+
+          <Grid ColumnDefinitions="32,*,90,90,90,110">
+            <TextBlock Grid.Column="1" Text="卷 / 目录" Classes="caption" />
+            <TextBlock Grid.Column="2" Text="文件系统" Classes="caption" />
+            <TextBlock Grid.Column="3" Text="总容量" Classes="caption" />
+            <TextBlock Grid.Column="4" Text="可用" Classes="caption" />
+            <TextBlock Grid.Column="5" Text="预计文件量级" Classes="caption" />
+          </Grid>
+
+          <ItemsControl ItemsSource="{Binding Rows}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:SetupVolumeRow">
+                <Grid ColumnDefinitions="32,*,90,90,90,110" Height="30">
+                  <CheckBox Grid.Column="0" IsChecked="{Binding Selected, Mode=TwoWay}"
+                            IsEnabled="{Binding Selectable}" Click="OnVolumeChecked"
+                            VerticalAlignment="Center" />
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4"
+                              VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Mount}" FontSize="13.5"
+                               Foreground="{DynamicResource Text}" />
+                    <TextBlock Text="{Binding MountSuffix}" FontSize="12"
+                               Foreground="{DynamicResource Warn}" />
+                  </StackPanel>
+                  <TextBlock Grid.Column="2" Text="{Binding Fs}" Classes="small" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="3" Text="{Binding TotalText}" Classes="small" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="4" Text="{Binding FreeText}" Classes="small" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="5" Text="{Binding EstimateText}" Classes="small" VerticalAlignment="Center" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
+      <!-- 2 位置 -->
+      <Border Classes="card">
+        <StackPanel Spacing="6">
+          <TextBlock Text="2 · 索引存放位置" Classes="section" />
+          <TextBlock Text="{Binding IndexRoot}" FontFamily="Consolas" FontSize="14"
+                     Foreground="{DynamicResource Text}" TextWrapping="Wrap" />
+          <TextBlock Classes="caption" TextWrapping="Wrap"
+                     Text="索引数据仅保存在本机该目录；可在“设置”页修改，在“索引”页清理并彻底删除。" />
+        </StackPanel>
+      </Border>
+
+      <!-- 3 排除 -->
+      <Border Classes="card">
+        <StackPanel Spacing="6">
+          <TextBlock Text="3 · 排除规则（每行一条 glob，与设置页共用）" Classes="section" />
+          <TextBox Text="{Binding ExcludesText, Mode=TwoWay}" AcceptsReturn="True"
+                   Height="140" FontFamily="Consolas" FontSize="13"
+                   Watermark="例如：node_modules/**"
+                   Background="{DynamicResource Input}" BorderBrush="{DynamicResource Stroke}" />
+          <TextBlock Classes="caption" TextWrapping="Wrap"
+                     Text="这里保存的是你自定义的规则；内置默认排除（回收站、系统卷信息、索引目录）扫描时自动叠加，无需填写。" />
+        </StackPanel>
+      </Border>
+
+      <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,4,0,8">
+        <TextBlock Grid.Column="0" Text="{Binding Summary}" Classes="caption"
+                   VerticalAlignment="Center" />
+        <ProgressBar Grid.Column="1" IsVisible="{Binding Busy}" IsIndeterminate="True"
+                     Width="60" Height="4" Margin="0,0,12,0" VerticalAlignment="Center" />
+        <Button Grid.Column="1" Classes="ghost" Content="以后再说" Margin="0,0,10,0"
+                Command="{Binding SkipCommand}" IsVisible="{Binding !Busy}" />
+        <Button Grid.Column="2" Classes="primary" Content="开始索引"
+                Command="{Binding StartCommand}" />
+      </Grid>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

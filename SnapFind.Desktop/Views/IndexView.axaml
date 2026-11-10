@@ -1,0 +1,188 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:SnapFind.Desktop.ViewModels"
+             x:Class="SnapFind.Desktop.Views.IndexView"
+             x:DataType="vm:IndexViewModel">
+
+  <Grid>
+  <ScrollViewer>
+    <StackPanel Margin="12" Spacing="10">
+
+      <TextBlock Text="索引" Classes="title" />
+
+      <!-- 错误 -->
+      <Border Classes="card" IsVisible="{Binding HasScopeError}"
+              BorderBrush="{DynamicResource Bad}">
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Grid.Column="0" Text="{Binding ScopeError}" TextWrapping="Wrap"
+                     Foreground="{DynamicResource Bad}" VerticalAlignment="Center" />
+          <Button Grid.Column="1" Classes="ghost" Content="重试"
+                  Command="{Binding RetryCommand}" />
+        </Grid>
+      </Border>
+
+      <!-- 进度：索引中实时更新；就绪后由 stats 摘要保留，重启也能看到 -->
+      <Border Classes="card" IsVisible="{Binding HasProgress}">
+        <StackPanel Spacing="10">
+          <!-- IO 限速是索引进程级（所有卷共享一个节流器），只在这里显示一处，
+               不再每张进度卡重复同一个数字 -->
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Grid.Column="0" Text="索引进度" Classes="section" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Text="{Binding IoLine}" Classes="caption"
+                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                       ToolTip.Tip="IO 限速作用于整个索引进程（所有卷共用一个节流器）：「低」最省磁盘 IO、索引较慢，「高」最快；档位在 config.json 的 index.throttle 调整（low / medium / high / off）。"
+                       ToolTip.ShowDelay="300" />
+          </Grid>
+
+          <ItemsControl ItemsSource="{Binding ProgressRows}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ProgressRow">
+                <Border Background="{DynamicResource ControlBg}"
+                        BorderBrush="{DynamicResource Stroke}" BorderThickness="1"
+                        CornerRadius="8" Padding="12" Margin="0,0,0,8">
+                  <StackPanel Spacing="7">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <TextBlock Grid.Column="0" Text="{Binding Mount}" FontWeight="SemiBold"
+                                 FontSize="14" Foreground="{DynamicResource Text}"
+                                 TextTrimming="CharacterEllipsis" />
+                      <TextBlock Grid.Column="1" Text="{Binding IndexLine}" Classes="caption"
+                                 Foreground="{Binding StateBrush}"
+                                 Margin="10,0,0,0" VerticalAlignment="Center" />
+                    </Grid>
+
+                    <ProgressBar Minimum="0" Maximum="1" Value="{Binding Fraction}" Height="14"
+                                 IsIndeterminate="{Binding Indeterminate}"
+                                 Background="{DynamicResource Faint}"
+                                 Foreground="{Binding StateBrush}" />
+                    <Grid ColumnDefinitions="*,Auto">
+                      <TextBlock Grid.Column="0" Text="{Binding StatsLine}" Classes="small"
+                                 TextTrimming="CharacterEllipsis" />
+                      <TextBlock Grid.Column="1" Text="{Binding PercentText}" Classes="small"
+                                 Margin="10,0,0,0" />
+                    </Grid>
+
+                    <TextBlock Text="{Binding MemoryWarning}" Classes="small"
+                               Foreground="{DynamicResource Warn}"
+                               IsVisible="{Binding HasMemoryWarning}" />
+
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <!-- 暂停/继续按状态互斥：避免对已暂停的卷再点暂停毫无反应 -->
+                      <Button Classes="ghost" Content="暂停" Tag="pause"
+                              IsVisible="{Binding CanPause}" Click="OnVolumeAction" />
+                      <Button Classes="ghost" Content="继续" Tag="resume"
+                              IsVisible="{Binding CanResume}" Click="OnVolumeAction" />
+                      <Button Classes="ghost" Content="重建" Tag="rebuild" Click="OnVolumeAction" />
+                      <Button Classes="ghost" Content="清理并删除索引" Tag="clean"
+                              Foreground="{DynamicResource Bad}" Click="OnVolumeAction" />
+                    </StackPanel>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
+      <!-- 范围 -->
+      <Border Classes="card">
+        <StackPanel Spacing="8">
+          <Grid ColumnDefinitions="*,Auto,Auto">
+            <TextBlock Grid.Column="0" Text="索引范围" Classes="section" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Classes="ghost" Content="索引全部固定盘" Margin="0,0,8,0"
+                    Command="{Binding StartAllFixedCommand}" />
+            <Button Grid.Column="2" Classes="ghost" Content="重新扫描磁盘"
+                    Command="{Binding RescanCommand}" />
+          </Grid>
+
+          <!-- 批量操作：对所有卷一键控制（重建/删除需确认） -->
+          <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,2,0,0">
+            <TextBlock Text="批量操作" Classes="caption" VerticalAlignment="Center" Margin="0,0,2,0" />
+            <Button Classes="ghost" Content="全部暂停" Command="{Binding BulkPauseCommand}" />
+            <Button Classes="ghost" Content="全部继续" Command="{Binding BulkResumeCommand}" />
+            <Button Classes="ghost" Content="全部重建" Command="{Binding BulkRebuildCommand}" />
+            <Button Classes="ghost" Content="全部清理并删除索引" Foreground="{DynamicResource Bad}"
+                    Command="{Binding BulkCleanCommand}" />
+          </StackPanel>
+
+          <!-- 表头 -->
+          <Grid ColumnDefinitions="32,*,90,90,110,70,52" Margin="0,4,0,0">
+            <TextBlock Grid.Column="1" Text="磁盘 / 目录" Classes="caption" />
+            <TextBlock Grid.Column="2" Text="类型" Classes="caption" />
+            <TextBlock Grid.Column="3" Text="容量" Classes="caption" />
+            <TextBlock Grid.Column="4" Text="状态" Classes="caption" />
+            <TextBlock Grid.Column="5" Text="文档" Classes="caption" />
+          </Grid>
+
+          <ItemsControl ItemsSource="{Binding Rows}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:VolumeRow">
+                <Grid ColumnDefinitions="32,*,90,90,110,70,52" Height="30">
+                  <CheckBox Grid.Column="0" IsChecked="{Binding Selected, Mode=TwoWay}"
+                            Click="OnVolumeChecked" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1" Text="{Binding Mount}" FontSize="13.5"
+                             Foreground="{DynamicResource Text}" VerticalAlignment="Center"
+                             TextTrimming="CharacterEllipsis" />
+                  <TextBlock Grid.Column="2" Text="{Binding KindLabel}" Classes="small"
+                             VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="3" Text="{Binding TotalText}" Classes="small"
+                             VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="4" Text="{Binding StateText}" Classes="small"
+                             VerticalAlignment="Center"
+                             Foreground="{Binding StateBrush}" />
+                  <TextBlock Grid.Column="5" Text="{Binding DocsText}" Classes="small"
+                             VerticalAlignment="Center" />
+                  <!-- 只有手工添加的目录可以移除；磁盘/网络卷由扫描发现，不支持 -->
+                  <Button Grid.Column="6" Classes="ghost" Content="移除" FontSize="12"
+                          Foreground="{DynamicResource Bad}" Padding="6,2"
+                          IsVisible="{Binding IsCustom}" Click="OnVolumeRemove"
+                          VerticalAlignment="Center" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <Grid ColumnDefinitions="Auto,Auto,*">
+            <Button Grid.Column="0" Classes="primary" Content="索引所选"
+                    Command="{Binding StartSelectedCommand}" />
+            <TextBlock Grid.Column="1" Text="{Binding SelectionSummary}" Classes="caption"
+                       VerticalAlignment="Center" Margin="10,0,0,0" />
+          </Grid>
+
+          <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+            <TextBlock Text="添加目录" Classes="caption" VerticalAlignment="Center" />
+            <TextBox Width="280" Height="28" MinHeight="28" FontSize="13"
+                     Text="{Binding ScopeDirEdit, Mode=TwoWay}"
+                     Watermark="D:\资料\项目（只索引这个目录）" />
+            <Button Classes="ghost" Content="浏览…" Click="OnBrowseDirectory" />
+            <Button Classes="primary" Content="添加并索引" Command="{Binding AddDirectoryCommand}" />
+          </StackPanel>
+
+          <TextBlock Classes="caption"
+                     Text="目录与磁盘各自独立成 vol-&lt;id&gt;/ 索引：可单独清理、重建，互不影响。" />
+        </StackPanel>
+      </Border>
+
+      <TextBlock Text="{Binding FooterText}" Classes="small" Margin="2,4,0,12" />
+      <TextBlock Text="{Binding EmptyText}" Classes="small" IsVisible="{Binding !HasStats}" />
+    </StackPanel>
+  </ScrollViewer>
+
+  <!-- 批量操作确认覆盖层：重建/删除索引是不可逆操作，必须用户确认 -->
+  <Border Name="BulkConfirm" IsVisible="False" Background="#88000000" Padding="24">
+    <Panel HorizontalAlignment="Center" VerticalAlignment="Center">
+      <Border Classes="card" MaxWidth="460" Padding="18" BorderBrush="{DynamicResource Warn}" BorderThickness="1">
+        <StackPanel Spacing="12">
+          <TextBlock Name="ConfirmTitle" FontWeight="SemiBold" FontSize="15"
+                     Foreground="{DynamicResource Text}" />
+          <TextBlock Name="ConfirmMessage" TextWrapping="Wrap" Classes="small"
+                     Foreground="{DynamicResource Text2}" LineHeight="20" />
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+            <Button Name="ConfirmCancelBtn" Classes="ghost" Content="取消" Click="OnBulkConfirmCancel" />
+            <Button Name="ConfirmOkBtn" Classes="primary" Content="确定执行" Click="OnBulkConfirmOk" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+    </Panel>
+  </Border>
+  </Grid>
+</UserControl>

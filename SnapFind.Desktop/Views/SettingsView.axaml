@@ -1,0 +1,191 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:SnapFind.Desktop.ViewModels"
+             x:Class="SnapFind.Desktop.Views.SettingsView"
+             x:DataType="vm:SettingsViewModel">
+
+  <ScrollViewer>
+    <StackPanel Margin="10" Spacing="12">
+
+      <TextBlock Text="设置" Classes="title" Margin="2,0,0,4" />
+
+      <!-- 外观 -->
+      <Border Classes="card">
+        <StackPanel Spacing="8">
+          <TextBlock Text="外观" Classes="section" />
+          <TextBlock Classes="caption" TextWrapping="Wrap"
+                     Text="主题默认跟随系统，也可固定为浅色或深色；选择立即生效并写入 config.json。" />
+          <StackPanel Orientation="Horizontal" Spacing="16">
+            <RadioButton GroupName="theme" Content="跟随系统" IsChecked="{Binding IsSystemTheme, Mode=TwoWay}" />
+            <RadioButton GroupName="theme" Content="浅色" IsChecked="{Binding IsLightTheme, Mode=TwoWay}" />
+            <RadioButton GroupName="theme" Content="深色" IsChecked="{Binding IsDarkTheme, Mode=TwoWay}" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <!-- 搜索 -->
+      <Border Classes="card">
+        <StackPanel Spacing="8">
+          <TextBlock Text="搜索" Classes="section" />
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBlock Text="查询时间预算（秒）" Classes="caption" VerticalAlignment="Center" />
+            <TextBox Width="70" Height="28" MinHeight="28" FontSize="13"
+                     Text="{Binding QueryBudgetText, Mode=TwoWay}"
+                     LostFocus="OnQueryBudgetLostFocus" />
+            <Button Classes="ghost" Content="保存" Command="{Binding SaveQueryBudgetCommand}" />
+          </StackPanel>
+          <TextBlock Text="{Binding QueryBudgetError}" FontSize="12"
+                     Foreground="{DynamicResource Bad}" />
+          <TextBlock Classes="caption" TextWrapping="Wrap"
+                     Text="超过预算只显示「耗时超预算」提醒，不会中止搜索；查询超时看门狗 = 预算 × 3 且不少于 10 秒。保存后即时生效，无需重启。" />
+        </StackPanel>
+      </Border>
+
+      <!-- 索引计划 -->
+      <Border Classes="card">
+        <StackPanel Spacing="8">
+          <TextBlock Text="索引计划" Classes="section" />
+          <CheckBox Content="每日定时增量索引（只补新增/变更文件，不重复抽取）"
+                    IsChecked="{Binding DailyScan, Mode=TwoWay}" />
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBox Width="80" Height="28" MinHeight="28" FontSize="13"
+                     Text="{Binding DailyScanAt, Mode=TwoWay}"
+                     LostFocus="OnDailyScanAtLostFocus" />
+            <TextBlock Classes="caption" VerticalAlignment="Center"
+                       Text="HH:MM，例如 03:00；到点后对已完成索引的磁盘做一次增量扫描（保存后即时生效）" />
+          </StackPanel>
+          <TextBlock Text="{Binding DailyScanAtError}" FontSize="12"
+                     Foreground="{DynamicResource Bad}" />
+          <CheckBox Content="启动时自动继续未完成的索引（断点续跑）［需重启索引服务］"
+                    IsChecked="{Binding ResumeOnStart, Mode=TwoWay}" />
+          <TextBlock Classes="caption" TextWrapping="Wrap"
+                     Text="断点按“一级目录”记录：重启后整棵跳过已扫完的目录，其余目录只比对 mtime/大小。" />
+        </StackPanel>
+      </Border>
+
+      <!-- 存储 -->
+      <Border Classes="card">
+        <StackPanel Spacing="8">
+          <TextBlock Text="存储" Classes="section" />
+          <TextBlock Classes="caption"
+                     Text="索引目录（留空 = 程序目录下的 index；保存后点下方「重启索引服务」生效）" />
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBox Width="440" Height="28" MinHeight="28" FontSize="13"
+                     Text="{Binding IndexRootEdit, Mode=TwoWay}"
+                     Watermark="例如 D:\SnapFindIndex" />
+            <Button Classes="ghost" Content="保存" Command="{Binding SaveIndexRootCommand}" />
+          </StackPanel>
+          <TextBlock Classes="caption" TextWrapping="Wrap"
+                     Text="{Binding ConfigPath, StringFormat='配置文件：{0}（保存在程序所在目录，随程序移动）'}" />
+        </StackPanel>
+      </Border>
+
+      <!-- 索引并发 -->
+      <Border Classes="card">
+        <StackPanel Spacing="8">
+          <TextBlock Text="索引" Classes="section" />
+          <TextBlock Classes="caption" TextWrapping="Wrap"
+                     Text="每个磁盘卷对应一个独立的 vol-&lt;id&gt;/ 目录（state.json、docs.db、segments/），互不影响；默认全部卷同时开始索引。" />
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBlock Text="同时索引的卷数" Classes="caption" VerticalAlignment="Center" />
+            <ComboBox Width="220" Height="28" MinHeight="28"
+                      ItemsSource="{Binding ParallelOptions}"
+                      SelectedItem="{Binding ParallelVolumes, Mode=TwoWay}" />
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBlock Text="IO 限速档位" Classes="caption" VerticalAlignment="Center" />
+            <ComboBox Width="120" Height="28" MinHeight="28"
+                      ItemsSource="{Binding ThrottleOptions}"
+                      SelectedItem="{Binding IoThrottleText, Mode=TwoWay}" />
+            <TextBlock Text="内存预算（MB）" Classes="caption" VerticalAlignment="Center" Margin="16,0,0,0" />
+            <TextBox Width="90" Height="28" MinHeight="28" FontSize="13"
+                     Text="{Binding MemoryBudgetText, Mode=TwoWay}"
+                     LostFocus="OnMemoryBudgetLostFocus" />
+            <Button Classes="ghost" Content="保存" Command="{Binding SaveMemoryBudgetCommand}" />
+          </StackPanel>
+          <TextBlock Classes="caption" TextWrapping="Wrap"
+                     Text="以上项均［需重启索引服务］（见下方「维护 → 重启索引服务」）。IO 限速作用于整个索引进程（所有卷共用一个节流器）：「低」最省磁盘（读取上限约 6 MB/秒）、索引最慢，「高」最快；机械硬盘建议「低」。「内存预算」是索引进程的目标上限（256–4096），超出后自动降级为只索引文件名/路径（正文搜不到）。" />
+        </StackPanel>
+      </Border>
+
+      <!-- 排除 -->
+      <Border Classes="card">
+        <StackPanel Spacing="8">
+          <TextBlock Text="索引排除" Classes="section" />
+          <TextBlock Classes="caption" TextWrapping="Wrap"
+                     Text="命中的文件/目录在扫描时直接跳过；保存后，下一次扫描或增量索引即生效，无需重启。" />
+          <TextBlock Classes="caption"
+                     Text="排除路径（每行一条：目录名或路径片段，路径中包含即跳过，大小写不敏感）" />
+          <TextBox Text="{Binding ExcludePathsText, Mode=TwoWay}" AcceptsReturn="True"
+                   Height="96" FontFamily="Consolas" FontSize="13"
+                   Watermark="$Recycle.Bin" />
+          <TextBlock Classes="caption"
+                     Text="排除文件类型（扩展名，不含点；可用逗号、分号或换行分隔）" />
+          <TextBox Text="{Binding ExcludeTypesText, Mode=TwoWay}" Height="28" MinHeight="28"
+                   FontSize="13" Watermark="tmp, temp, bak" />
+          <TextBlock Classes="caption"
+                     Text="排除规则（每行一条 glob，如 node_modules/**；与首次引导的排除列表相同）" />
+          <TextBox Text="{Binding ExcludeRulesText, Mode=TwoWay}" AcceptsReturn="True"
+                   Height="72" FontFamily="Consolas" FontSize="13"
+                   Watermark="node_modules/**" />
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Classes="primary" Content="保存排除规则" Command="{Binding SaveExcludesCommand}" />
+            <Button Classes="ghost" Content="恢复默认" Command="{Binding RestoreDefaultExcludesCommand}" />
+          </StackPanel>
+          <TextBlock Classes="caption" TextWrapping="Wrap"
+                     Text="内置默认已排除任意盘符的 $Recycle.Bin 与系统卷信息目录，以及索引目录自身——这些不在上面的列表里，扫描时自动叠加。" />
+        </StackPanel>
+      </Border>
+
+      <!-- 启动与托盘 -->
+      <Border Classes="card">
+        <StackPanel Spacing="8">
+          <TextBlock Text="启动与托盘" Classes="section" />
+          <StackPanel IsVisible="{Binding TraySupported}" Spacing="8">
+            <CheckBox Content="关闭窗口时最小化到托盘"
+                      IsChecked="{Binding CloseToTray, Mode=TwoWay}" />
+            <TextBlock Classes="caption" TextWrapping="Wrap"
+                       Text="托盘图标随此开关出现/消失（取消勾选 = 关闭窗口即退出并关闭索引进程）；图标在启动时创建，更改后需重启应用。" />
+            <Button Classes="ghost" Content="隐藏到托盘" HorizontalAlignment="Left"
+                    Command="{Binding HideToTrayCommand}" />
+          </StackPanel>
+          <TextBlock Classes="small" IsVisible="{Binding !TraySupported}"
+                     Text="当前平台不支持托盘：关闭窗口即关闭索引进程。" />
+
+          <StackPanel IsVisible="{Binding AutostartSupported}" Spacing="4">
+            <CheckBox Content="开机时随系统启动（驻留托盘）"
+                      IsChecked="{Binding Autostart, Mode=TwoWay}" />
+            <TextBlock Classes="caption"
+                       Text="启动项写入当前用户的本机配置，不写入系统目录、不联网。" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <!-- 维护 -->
+      <Border Classes="card">
+        <StackPanel Spacing="8">
+          <TextBlock Text="维护" Classes="section" />
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Classes="ghost" Content="整理分段（回收垃圾块）"
+                    Command="{Binding CompactCommand}" />
+            <Button Classes="primary" Content="重启索引服务"
+                    Command="{Binding RestartIndexServiceCommand}" />
+          </StackPanel>
+          <TextBlock Classes="caption"
+                     Text="更新文件会在段内留下旧块，整理后可回收磁盘空间。" />
+          <TextBlock Classes="caption" TextWrapping="Wrap"
+                     Text="重启索引服务：所有标注［需重启索引服务］的设置（索引目录、并发卷数、IO 限速、内存预算、断点续跑）随即生效。索引进程会先保存检查点再退出，由桌面端自动拉起新进程，无需关闭应用。" />
+        </StackPanel>
+      </Border>
+
+      <!-- 关于 -->
+      <Border Classes="card" Margin="0,0,0,12">
+        <StackPanel Spacing="6">
+          <TextBlock Text="关于" Classes="section" />
+          <TextBlock Text="{Binding VersionText}" Classes="caption" TextWrapping="Wrap" />
+          <TextBlock Text="{Binding AboutLine}" Classes="caption" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

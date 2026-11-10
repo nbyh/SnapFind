@@ -1,0 +1,459 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:SnapFind.Desktop.ViewModels"
+             xmlns:ctl="using:SnapFind.Desktop.Controls"
+             x:Class="SnapFind.Desktop.Views.SearchView"
+             x:DataType="vm:SearchViewModel">
+
+  <UserControl.Styles>
+    <!-- 类型标签 -->
+    <Style Selector="Button.tag">
+      <Setter Property="Background" Value="{DynamicResource ControlBg}" />
+      <Setter Property="Foreground" Value="{DynamicResource Text2}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Stroke}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="7" />
+      <Setter Property="Height" Value="28" />
+      <Setter Property="Padding" Value="10,2" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Margin" Value="0,0,6,6" />
+    </Style>
+    <Style Selector="Button.tag:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource ControlHover}" />
+    </Style>
+    <Style Selector="Button.tag.selected">
+      <Setter Property="Background" Value="{DynamicResource AccentSoft}" />
+      <Setter Property="Foreground" Value="{DynamicResource Text}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBorder}" />
+    </Style>
+
+    <!-- 表头列 -->
+    <Style Selector="Button.colhead">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="5" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Height" Value="30" />
+      <Setter Property="MinHeight" Value="30" />
+      <Setter Property="FontSize" Value="12.5" />
+      <Setter Property="Foreground" Value="{DynamicResource Text2}" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.colhead:pointerover">
+      <Setter Property="Foreground" Value="{DynamicResource Text}" />
+    </Style>
+    <Style Selector="Button.colhead:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource CardHover}" />
+    </Style>
+
+    <!-- 列宽拖动手柄：作为独立的 9px 列间距，表头与行使用同一间距以保证对齐 -->
+    <Style Selector="Border.colresize">
+      <Setter Property="Width" Value="9" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Cursor" Value="SizeWestEast" />
+    </Style>
+    <Style Selector="Border.colresize:pointerover">
+      <Setter Property="Background" Value="{DynamicResource AccentBorder}" />
+    </Style>
+
+    <!-- 结果行 -->
+    <Style Selector="ListBox#ResultList ListBoxItem">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="0,1" />
+      <Setter Property="MinHeight" Value="52" />
+      <Setter Property="CornerRadius" Value="7" />
+    </Style>
+    <!-- 预览正文行：固定行高（标尺按 19px/行换算滚动位置） -->
+    <Style Selector="ListBox#PreviewList ListBoxItem">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="0" />
+      <Setter Property="MinHeight" Value="19" />
+      <Setter Property="Height" Value="19" />
+    </Style>
+
+    <!-- 预览正文行 -->
+    <Style Selector="Border.pl">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Padding" Value="0,0,4,0" />
+    </Style>
+    <Style Selector="Border.pl.queryHit">
+      <Setter Property="Background" Value="{DynamicResource AccentSoft}" />
+    </Style>
+    <Style Selector="Border.pl.findHit">
+      <Setter Property="Background" Value="{DynamicResource Faint}" />
+    </Style>
+    <Style Selector="Border.pl.findCurrent">
+      <Setter Property="Background" Value="{DynamicResource Warn}" />
+      <Setter Property="Opacity" Value="0.55" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid Name="RootGrid" Margin="14,10,14,12">
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="*" MinWidth="420" />
+      <ColumnDefinition Width="10" />
+      <ColumnDefinition Width="520" MinWidth="360" MaxWidth="1100" />
+    </Grid.ColumnDefinitions>
+
+    <!-- ===== 主区 ===== -->
+    <Grid Grid.Column="0" RowDefinitions="Auto,Auto,Auto,*">
+
+      <!-- 工具栏 -->
+      <Border Grid.Row="0" Classes="card" Padding="14,12" Margin="0,0,0,10">
+        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+          <TextBox Grid.Column="0" Name="QueryBox"
+                   Text="{Binding Query, Mode=TwoWay}"
+                   KeyDown="OnQueryKeyDown"
+                   FontSize="15" Height="36" MinHeight="36" VerticalContentAlignment="Center"
+                   CornerRadius="8"
+                   Watermark="搜索文件名、路径或内容：AND/OR/NOT、&quot;短语&quot;、通配符、name: / ext:" />
+          <Button Grid.Column="1" Classes="primary" Content="搜索"
+                  Command="{Binding SearchNowCommand}" Height="36" Padding="20,4" />
+          <ProgressBar Grid.Column="2" IsVisible="{Binding Searching}" IsIndeterminate="True"
+                       Width="34" Height="4" VerticalAlignment="Center" />
+        </Grid>
+      </Border>
+
+      <!-- 过滤 -->
+      <Border Grid.Row="1" Classes="cardDense" Padding="10,8" Margin="0,0,0,10">
+        <StackPanel Spacing="6">
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <TextBlock Grid.Column="0" Text="类型" Classes="caption" VerticalAlignment="Center" />
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+              <Button Name="MoreButton" Classes="tag" Content="{Binding MoreLabel}"
+                      IsVisible="{Binding HasMoreTypes}"
+                      Click="OnMoreClick" />
+              <Button Classes="tag" Content="清除" IsVisible="{Binding HasFilter}"
+                      Command="{Binding ClearTypesCommand}" />
+              <TextBlock Text="{Binding FilterSummary}" Classes="caption" VerticalAlignment="Center" />
+            </StackPanel>
+          </Grid>
+
+          <!-- 自适应宽度 + 自动换行：独立占一行，预览面板再窄也只是换行，不会遮挡 -->
+          <ItemsControl ItemsSource="{Binding TypeTags}" Margin="0,2,0,0">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:TypeTag">
+                <Button Classes="tag" Classes.selected="{Binding Selected}"
+                        Content="{Binding Label}"
+                        Command="{Binding ToggleCommand}"
+                        CommandParameter="{Binding Ext}"
+                        ToolTip.Tip="点击选中/取消该类型（可多选）" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <ToggleButton Content="路径筛选" FontSize="13" Height="28"
+                          IsChecked="{Binding PathFilterOpen, Mode=TwoWay}"
+                          ToolTip.Tip="只搜索某个目录及其子目录（可选，默认不限）" />
+            <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding PathFilterOpen}">
+              <TextBlock Text="限定路径" Classes="caption" VerticalAlignment="Center" />
+              <TextBox Width="300" Height="28" MinHeight="28" FontSize="13"
+                       Text="{Binding PathFilter, Mode=TwoWay}"
+                       Watermark="例如 D:\docs（留空 = 不限）" />
+              <TextBlock Text="只搜索该目录及其子目录" Classes="caption" VerticalAlignment="Center" />
+            </StackPanel>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <!-- 警告 -->
+      <ItemsControl Grid.Row="2" ItemsSource="{Binding Warnings}" Margin="2,0,0,8">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="x:String">
+            <TextBlock Text="{Binding}" FontSize="12.5" Foreground="{DynamicResource Warn}"
+                       TextWrapping="Wrap" />
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <!-- 结果 -->
+      <Grid Grid.Row="3" RowDefinitions="Auto,*">
+
+        <!-- 空态 -->
+        <StackPanel Grid.Row="0" IsVisible="{Binding ShowEmptyState}" Margin="0,28,0,0" Spacing="6">
+          <TextBlock IsVisible="{Binding EmptyStateNoQuery}" FontSize="17"
+                     Foreground="{DynamicResource Text2}" Text="输入关键词开始搜索 — 全部在本机完成" />
+          <TextBlock IsVisible="{Binding EmptyStateNoQuery}" Classes="caption"
+                     Text="支持 AND/OR/NOT、&quot;短语&quot;、通配符，以及 name: / path: / ext: 前缀" />
+          <TextBlock IsVisible="{Binding !EmptyStateNoQuery}" FontSize="17"
+                     Foreground="{DynamicResource Text}" Text="没有找到匹配结果" />
+          <TextBlock IsVisible="{Binding !EmptyStateNoQuery}" Classes="caption"
+                     Text="试试更短的关键词，或先在“索引”页建立索引。" />
+        </StackPanel>
+
+        <!-- 表头 -->
+        <Grid Grid.Row="0" ColumnDefinitions="44,46,*,Auto" Height="32"
+              IsVisible="{Binding HasResults}" Margin="0,0,0,2">
+          <Button Grid.Column="0" Classes="colhead" Padding="0,0,10,0"
+                  HorizontalContentAlignment="Right" Content="#"
+                  ToolTip.Tip="恢复默认顺序（到达顺序）"
+                  Command="{Binding SortByCommand}" CommandParameter="reset" />
+
+          <Button Grid.Column="2" Classes="colhead" Padding="8,0"
+                  Command="{Binding SortByCommand}" CommandParameter="name">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <TextBlock Text="名称" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding NameSortMark}" FontSize="9" VerticalAlignment="Center"
+                         Foreground="{DynamicResource Accent}" />
+            </StackPanel>
+          </Button>
+
+          <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+            <!-- 大小列（左侧拖动手柄调整列宽） -->
+            <Border Classes="colresize" Tag="size"
+                    PointerPressed="OnColumnResizePressed"
+                    PointerMoved="OnColumnResizeMoved"
+                    PointerReleased="OnColumnResizeReleased"
+                    ToolTip.Tip="拖动调整「大小」列宽，双击恢复默认">
+              <Border Width="1" HorizontalAlignment="Center" IsHitTestVisible="False"
+                      Background="{DynamicResource Stroke}" />
+            </Border>
+            <Grid Width="{Binding Layout.SizeWidth}">
+              <Button Classes="colhead" Padding="0" HorizontalContentAlignment="Center"
+                      Command="{Binding SortByCommand}" CommandParameter="size">
+                <StackPanel Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
+                  <TextBlock Text="大小" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding SizeSortMark}" FontSize="9" VerticalAlignment="Center"
+                             Foreground="{DynamicResource Accent}" />
+                </StackPanel>
+              </Button>
+            </Grid>
+
+            <!-- 修改时间列（左侧拖动手柄调整列宽） -->
+            <Border Classes="colresize" Tag="mtime"
+                    PointerPressed="OnColumnResizePressed"
+                    PointerMoved="OnColumnResizeMoved"
+                    PointerReleased="OnColumnResizeReleased"
+                    ToolTip.Tip="拖动调整「修改时间」列宽，双击恢复默认">
+              <Border Width="1" HorizontalAlignment="Center" IsHitTestVisible="False"
+                      Background="{DynamicResource Stroke}" />
+            </Border>
+            <Grid Width="{Binding Layout.MtimeWidth}">
+              <Button Classes="colhead" Padding="0" HorizontalContentAlignment="Center"
+                      Command="{Binding SortByCommand}" CommandParameter="mtime">
+                <StackPanel Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
+                  <TextBlock Text="修改时间" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding MtimeSortMark}" FontSize="9" VerticalAlignment="Center"
+                             Foreground="{DynamicResource Accent}" />
+                </StackPanel>
+              </Button>
+            </Grid>
+          </StackPanel>
+        </Grid>
+
+        <ListBox Grid.Row="1" Name="ResultList"
+                 ItemsSource="{Binding Hits}"
+                 SelectedIndex="{Binding SelectedIndex, Mode=TwoWay}"
+                 Background="Transparent" BorderThickness="0"
+                 IsVisible="{Binding HasResults}"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:HitItem">
+              <Grid ColumnDefinitions="44,46,*,Auto" Height="52">
+                <TextBlock Grid.Column="0" Text="{Binding Seq}" FontFamily="Consolas"
+                           FontSize="11.5" HorizontalAlignment="Right" Margin="0,0,10,0"
+                           VerticalAlignment="Center" Foreground="{DynamicResource Text2}" />
+
+                <Border Grid.Column="1" Width="38" Height="26" CornerRadius="6"
+                        HorizontalAlignment="Left" VerticalAlignment="Center"
+                        Background="{Binding ExtTint}">
+                  <Grid ColumnDefinitions="3,*">
+                    <Border Grid.Column="0" Background="{Binding ExtColor}" CornerRadius="6,0,0,6" />
+                    <TextBlock Grid.Column="1" Text="{Binding ExtBadge}" FontSize="11.5"
+                               Foreground="{Binding ExtColor}" FontWeight="SemiBold"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                  </Grid>
+                </Border>
+
+                <StackPanel Grid.Column="2" Margin="8,0,10,0" VerticalAlignment="Center" Spacing="2">
+                  <!-- 名称占剩余宽度并按需省略，徽标固定在右侧，避免长文件名把徽标挤出可视区 -->
+                  <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="6">
+                    <TextBlock Grid.Column="0" Text="{Binding Name}" FontSize="14.5"
+                               Foreground="{DynamicResource Text}"
+                               TextTrimming="CharacterEllipsis" />
+                    <Border Grid.Column="1" IsVisible="{Binding HasBadges}"
+                            Background="{DynamicResource AccentSoft}"
+                            CornerRadius="4" Padding="5,0" Height="16" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding FieldBadges}" FontSize="11"
+                                 Foreground="{DynamicResource Accent}" />
+                    </Border>
+                    <Border Grid.Column="2" IsVisible="{Binding NameOnly}"
+                            Background="{DynamicResource Faint}"
+                            CornerRadius="4" Padding="5,0" Height="16" VerticalAlignment="Center">
+                      <TextBlock Text="仅名称" FontSize="11" Foreground="{DynamicResource Warn}" />
+                    </Border>
+                    <TextBlock Grid.Column="3" IsVisible="{Binding Encrypted}" Text="已加密"
+                               FontSize="12" Foreground="{DynamicResource Warn}"
+                               VerticalAlignment="Center" />
+                  </Grid>
+                  <TextBlock Text="{Binding Path}" FontSize="12.5"
+                             Foreground="{DynamicResource Text2}" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                  <Border Width="9" />
+                  <TextBlock Width="{Binding Layout.SizeWidth}"
+                             Text="{Binding SizeText}" FontSize="12" TextAlignment="Center"
+                             Foreground="{DynamicResource Text2}" VerticalAlignment="Center" />
+                  <Border Width="9" />
+                  <TextBlock Width="{Binding Layout.MtimeWidth}" Text="{Binding MtimeText}"
+                             FontSize="12" TextAlignment="Center"
+                             Foreground="{DynamicResource Text2}" VerticalAlignment="Center" />
+                </StackPanel>
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </Grid>
+    </Grid>
+
+    <!-- ===== 预览区宽度拖拽（GridSplitter 必须是带列定义的 Grid 的直接子元素） ===== -->
+    <Border Grid.Column="1" x:Name="SplitterLine" Width="1" Margin="0,10"
+            HorizontalAlignment="Center" IsHitTestVisible="False"
+            Background="{DynamicResource Stroke}" />
+    <GridSplitter Grid.Column="1" x:Name="PreviewSplitter" ResizeDirection="Columns"
+                  Background="Transparent" />
+
+    <!-- ===== 预览面板 ===== -->
+    <Border Grid.Column="2" x:Name="PreviewHost" Padding="10"
+            Background="{DynamicResource Bg}" IsVisible="{Binding ShowPreview}">
+      <!-- 摘要区（"内容"片段）已移除：底部正文预览已覆盖，重复展示且占高度 -->
+      <Grid DataContext="{Binding Preview}" x:DataType="vm:PreviewViewModel"
+            RowDefinitions="Auto,*">
+
+        <!-- 元信息 -->
+        <Border Grid.Row="0" Classes="card" Margin="0,0,0,10">
+          <StackPanel Spacing="8">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Grid.Column="0" Text="{Binding Hit.Name}" FontWeight="Bold"
+                         FontSize="15" Foreground="{DynamicResource Text}"
+                         TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                         Margin="0,0,10,0" />
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                <Button Classes="primary" Content="打开" Click="OnOpenClick" />
+                <Button Classes="ghost" Content="定位" Click="OnRevealClick" />
+                <Button Classes="ghost" Content="复制" Click="OnCopyClick" />
+              </StackPanel>
+            </Grid>
+            <TextBlock Text="{Binding MetaLine}" Classes="small" TextWrapping="Wrap" />
+            <TextBox Text="{Binding Hit.Path}" IsReadOnly="True" FontSize="12"
+                     MinHeight="30" MaxHeight="56" TextWrapping="Wrap"
+                     Background="{DynamicResource Input}"
+                     BorderBrush="{DynamicResource Stroke}" CornerRadius="6" />
+            <TextBlock Text="{Binding LoadError}" Classes="small"
+                       Foreground="{DynamicResource Warn}" TextWrapping="Wrap"
+                       IsVisible="{Binding HasLoadError}" />
+          </StackPanel>
+        </Border>
+
+        <!-- 正文 -->
+        <Border Grid.Row="1" Classes="card" Padding="10,8">
+          <Grid RowDefinitions="Auto,Auto,*">
+
+            <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+              <TextBlock Grid.Column="0" Text="正文预览（本机直读全文）" Classes="small"
+                         VerticalAlignment="Center" />
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                <Button Classes="ghost" Content="查找 Ctrl+F" FontSize="12" Height="26"
+                        Click="OnFindOpenClick" />
+                <TextBlock Text="{Binding LineCountText}" Classes="small" VerticalAlignment="Center" />
+              </StackPanel>
+            </Grid>
+
+            <!-- 查找栏独占一行；用 WrapPanel 让窄面板自动换行，避免按钮/选项被压扁 -->
+            <Border Grid.Row="1" IsVisible="{Binding FindOpen}" Margin="0,0,0,8" Padding="8,8"
+                    CornerRadius="7" Background="{DynamicResource ControlBg}"
+                    BorderBrush="{DynamicResource Stroke}" BorderThickness="1">
+              <WrapPanel Orientation="Horizontal">
+                <TextBox Name="FindBox" Width="170" Height="30" MinHeight="30" FontSize="12.5"
+                         Margin="0,0,8,6" VerticalAlignment="Top"
+                         Text="{Binding FindText, Mode=TwoWay}" Watermark="在正文中查找"
+                         KeyDown="OnFindBoxKeyDown" />
+                <ToggleButton Content="Aa" Height="30" MinHeight="30" MinWidth="40" Padding="9,0"
+                              Margin="0,0,6,6" FontSize="12" VerticalAlignment="Top"
+                              IsChecked="{Binding FindMatchCase, Mode=TwoWay}"
+                              ToolTip.Tip="区分大小写" />
+                <ToggleButton Content="全字" Height="30" MinHeight="30" Padding="10,0"
+                              Margin="0,0,8,6" FontSize="12" VerticalAlignment="Top"
+                              IsChecked="{Binding FindWholeWord, Mode=TwoWay}"
+                              ToolTip.Tip="全字匹配（整词）" />
+                <TextBlock Text="{Binding FindCounter}" Classes="small"
+                           Margin="0,0,8,6" VerticalAlignment="Center" />
+                <Button Classes="ghost" Content="上一个" FontSize="12" Height="30" Margin="0,0,6,6"
+                        Click="OnFindPrevClick" />
+                <Button Classes="ghost" Content="下一个" FontSize="12" Height="30" Margin="0,0,6,6"
+                        Click="OnFindNextClick" />
+                <Button Classes="ghost" Content="关闭" FontSize="12" Height="30" Margin="0,0,0,6"
+                        Click="OnFindCloseClick" />
+              </WrapPanel>
+            </Border>
+
+            <TextBlock Grid.Row="2" IsVisible="{Binding Loading}" Classes="small"
+                       Text="正在读取全文…" Margin="0,8,0,0" />
+
+            <TextBlock Grid.Row="2" IsVisible="{Binding NameOnly}" Classes="small"
+                       Foreground="{DynamicResource Warn}" TextWrapping="Wrap"
+                       Text="二进制 / 不可读类型：该文件只索引文件名与路径，正文不参与检索。" />
+
+            <!-- 正文 + 右侧标尺：标尺兼作滚动条，因此隐藏默认滚动条 -->
+            <Grid Grid.Row="2" ColumnDefinitions="*,18" IsVisible="{Binding !Loading}">
+              <ListBox Grid.Column="0" Name="PreviewList" ItemsSource="{Binding Lines}"
+                       Background="Transparent" BorderThickness="0"
+                       ScrollViewer.VerticalScrollBarVisibility="Hidden"
+                       ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:PreviewLine">
+                    <Border Classes="pl" Classes.queryHit="{Binding QueryHit}"
+                            Classes.findHit="{Binding FindHit}"
+                            Classes.findCurrent="{Binding FindCurrent}"
+                            Height="19">
+                      <Grid ColumnDefinitions="52,*">
+                        <TextBlock Grid.Column="0" Text="{Binding No}" FontFamily="Consolas"
+                                   FontSize="11" HorizontalAlignment="Right" Margin="0,0,8,0"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource Text2}" Opacity="0.75" />
+                        <ctl:MarkTextBlock Grid.Column="1" SourceText="{Binding Text}" Terms="{Binding Terms}"
+                                           FontFamily="Consolas" FontSize="13"
+                                           VerticalAlignment="Center"
+                                           Foreground="{DynamicResource Text}"
+                                           TextWrapping="NoWrap"
+                                           MarkBackground="{DynamicResource MarkBg}"
+                                           MarkForeground="{DynamicResource MarkFg}" />
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+
+              <!-- 透明 Border 承接指针事件（自定义 Control 不参与命中测试） -->
+              <Border Grid.Column="1" Name="RulerHost" Background="Transparent" Cursor="Hand"
+                      PointerPressed="OnRulerPressed"
+                      PointerMoved="OnRulerMoved"
+                      PointerReleased="OnRulerReleased"
+                      ToolTip.Tip="点击彩色标记跳到对应命中行；拖动可浏览全文">
+                <ctl:PreviewRuler Name="Ruler" Margin="3,0,0,0"
+                                  TotalLines="{Binding TotalLines}"
+                                  QueryHits="{Binding QueryHitLines}"
+                                  FindHits="{Binding FindHitLines}"
+                                  FindCurrentLine="{Binding FindCurrentLine}"
+                                  TrackBrush="{DynamicResource CardHover}"
+                                  HandleBrush="{DynamicResource RulerHandle}"
+                                  QueryMarkBrush="{DynamicResource Accent}"
+                                  FindMarkBrush="{DynamicResource FindMarkSoft}"
+                                  FindCurrentMarkBrush="{DynamicResource FindMarkCurrent}" />
+              </Border>
+            </Grid>
+          </Grid>
+        </Border>
+      </Grid>
+    </Border>
+  </Grid>
+</UserControl>

@@ -1,0 +1,338 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:SnapFind.Desktop.ViewModels"
+        xmlns:views="using:SnapFind.Desktop.Views"
+        x:Class="SnapFind.Desktop.Views.MainWindow"
+        x:DataType="vm:ShellViewModel"
+        Title="SnapFind — 本地全文搜索"
+        Width="1280" Height="820"
+        MinWidth="960" MinHeight="640"
+        WindowStartupLocation="CenterScreen"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
+        ExtendClientAreaTitleBarHeightHint="-1"
+        Background="{DynamicResource Bg}">
+
+  <Window.Resources>
+    <!-- 跨平台矢量图标：原来用 Segoe MDL2 Assets（Windows 专有字体），Linux 上
+         全部显示为方块（计划 R3-1）。改用 PathIcon + 内置几何数据，
+         用 Foreground 着色，视觉效果与原字形一致。 -->
+    <StreamGeometry x:Key="IcoMenu">M1,2 H17 V4 H1 Z M1,8 H17 V10 H1 Z M1,14 H17 V16 H1 Z</StreamGeometry>
+    <StreamGeometry x:Key="IcoSearch">F0 M6.5,1 A5.5,5.5 0 1 0 6.5,12 A5.5,5.5 0 1 0 6.5,1 Z M6.5,3 A3.5,3.5 0 1 1 6.5,10 A3.5,3.5 0 1 1 6.5,3 Z M10.4,9.6 L16,15.2 L14.6,16.6 L9,11 Z</StreamGeometry>
+    <StreamGeometry x:Key="IcoMin">M1,12.5 H15 V14.5 H1 Z</StreamGeometry>
+    <StreamGeometry x:Key="IcoMax">F0 M2,3 H14 V13 H2 Z M3.5,4.5 H12.5 V11.5 H3.5 Z</StreamGeometry>
+    <StreamGeometry x:Key="IcoRestore">F0 M2,5 H14 V17 H2 Z M3.5,6.5 H12.5 V15.5 H3.5 Z M9,1 H17 V9 H15.5 V2.5 H9 Z</StreamGeometry>
+    <StreamGeometry x:Key="IcoClose">F1 M1.8,2.6 L2.6,1.8 L14.2,13.4 L13.4,14.2 Z M13.4,1.8 L14.2,2.6 L2.6,14.2 L1.8,13.4 Z</StreamGeometry>
+    <StreamGeometry x:Key="IcoLayers">M8,1 L15,5 L8,9 L1,5 Z M3.4,7.8 L8,10.4 L12.6,7.8 L15,9.1 L8,13.2 L1,9.1 Z</StreamGeometry>
+    <StreamGeometry x:Key="IcoSettings">M1,4 H15 V6 H1 Z M1,12 H15 V14 H1 Z M4,1 H6 V9 H4 Z M10,9 H12 V17 H10 Z</StreamGeometry>
+    <StreamGeometry x:Key="IcoWarn">F0 M8,1 L15.8,14.5 L0.2,14.5 Z M8,3.2 L13.9,13.5 L2.1,13.5 Z M7.3,6 L8.7,6 L8.5,11 L7.5,11 Z M7.3,11.8 L8.7,11.8 L8.7,13 L7.3,13 Z</StreamGeometry>
+  </Window.Resources>
+
+  <Window.Styles>
+    <!-- 标题栏图标按钮 -->
+    <Style Selector="Button.iconbtn">
+      <Setter Property="Width" Value="34" />
+      <Setter Property="Height" Value="34" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="7" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{DynamicResource Text2}" />
+    </Style>
+    <Style Selector="Button.iconbtn:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource CardHover}" />
+    </Style>
+    <Style Selector="Button.iconbtn:pointerover TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource Text}" />
+    </Style>
+
+    <!-- 窗口控制按钮 -->
+    <Style Selector="Button.captionbtn">
+      <Setter Property="Width" Value="46" />
+      <Setter Property="Height" Value="46" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{DynamicResource Text2}" />
+    </Style>
+    <Style Selector="Button.captionbtn:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource CardHover}" />
+    </Style>
+    <Style Selector="Button.captionbtn:pointerover TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource Text}" />
+    </Style>
+    <Style Selector="Button.captionbtn.close:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource CloseHover}" />
+    </Style>
+    <Style Selector="Button.captionbtn.close:pointerover TextBlock">
+      <Setter Property="Foreground" Value="#FFFFFF" />
+    </Style>
+
+    <!-- 导航项 -->
+    <Style Selector="Button.nav">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource Text2}" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Height" Value="40" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Padding" Value="11,0" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="Margin" Value="0,2" />
+    </Style>
+    <Style Selector="Button.nav:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource CardHover}" />
+    </Style>
+    <Style Selector="Button.nav.selected /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource AccentSoft}" />
+    </Style>
+    <Style Selector="Button.nav.selected">
+      <Setter Property="Foreground" Value="{DynamicResource Text}" />
+    </Style>
+    <Style Selector="Button.nav.selected TextBlock.mdl">
+      <Setter Property="Foreground" Value="{DynamicResource Accent}" />
+    </Style>
+
+    <!-- 卡片 -->
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{DynamicResource Card}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Stroke}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Padding" Value="14" />
+    </Style>
+    <Style Selector="Border.cardDense">
+      <Setter Property="Background" Value="{DynamicResource Card}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Stroke}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Padding" Value="8" />
+    </Style>
+
+    <!-- 主按钮 -->
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="{DynamicResource Accent}" />
+      <Setter Property="Foreground" Value="{DynamicResource OnAccent}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Height" Value="32" />
+      <Setter Property="Padding" Value="14,4" />
+    </Style>
+    <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Accent}" />
+      <Setter Property="Opacity" Value="0.9" />
+    </Style>
+
+    <Style Selector="Button.ghost">
+      <Setter Property="Background" Value="{DynamicResource ControlBg}" />
+      <Setter Property="Foreground" Value="{DynamicResource Text}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Stroke}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Height" Value="32" />
+      <Setter Property="Padding" Value="12,4" />
+    </Style>
+    <Style Selector="Button.ghost:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource ControlHover}" />
+    </Style>
+
+    <Style Selector="TextBlock.caption">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Foreground" Value="{DynamicResource Text2}" />
+    </Style>
+    <Style Selector="TextBlock.small">
+      <Setter Property="FontSize" Value="12.5" />
+      <Setter Property="Foreground" Value="{DynamicResource Text2}" />
+    </Style>
+    <Style Selector="TextBlock.title">
+      <Setter Property="FontSize" Value="20" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="Foreground" Value="{DynamicResource Text}" />
+    </Style>
+    <Style Selector="TextBlock.section">
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource Text}" />
+    </Style>
+  </Window.Styles>
+
+  <Grid RowDefinitions="Auto,*,Auto">
+
+    <!-- ===== 自绘标题栏（可拖动 / 双击最大化） ===== -->
+    <Grid Grid.Row="0" Name="TitleBarHost" Height="48"
+          Background="{DynamicResource TitleBar}"
+          PointerPressed="OnTitleBarPointerPressed">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10"
+                    Margin="12,0,0,0" VerticalAlignment="Center">
+          <Button Classes="iconbtn" Command="{Binding ToggleNavCommand}"
+                  ToolTip.Tip="折叠 / 展开左侧导航"
+                  AutomationProperties.Name="折叠或展开左侧导航">
+            <PathIcon Width="18" Height="18" Data="{StaticResource IcoMenu}" />
+          </Button>
+
+          <!-- 与程序图标同款：渐变底 + 白色放大镜 -->
+          <Border Width="26" Height="26" CornerRadius="7">
+            <Border.Background>
+              <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                <GradientStop Color="#4C8DFF" Offset="0" />
+                <GradientStop Color="#8B5CF6" Offset="1" />
+              </LinearGradientBrush>
+            </Border.Background>
+            <PathIcon Width="15" Height="15" Data="{StaticResource IcoSearch}" Foreground="#FFFFFF" />
+          </Border>
+
+          <TextBlock Text="SnapFind" FontSize="15" FontWeight="SemiBold"
+                     Foreground="{DynamicResource Text}" VerticalAlignment="Center" />
+
+          <TextBlock Text="·" FontSize="14" Foreground="{DynamicResource Text2}"
+                     VerticalAlignment="Center" IsVisible="{Binding IsMain}" />
+          <TextBlock Text="{Binding CurrentPageTitle}" FontSize="13"
+                     Foreground="{DynamicResource Text2}" VerticalAlignment="Center"
+                     IsVisible="{Binding IsMain}" />
+        </StackPanel>
+
+        <StackPanel Grid.Column="2" Orientation="Horizontal">
+          <Button Classes="captionbtn" Click="OnMinimizeClick" ToolTip.Tip="最小化"
+                  AutomationProperties.Name="最小化">
+            <PathIcon Name="MinGlyph" Width="12" Height="12" Data="{StaticResource IcoMin}" />
+          </Button>
+          <Button Classes="captionbtn" Click="OnMaximizeClick" ToolTip.Tip="最大化 / 还原"
+                  AutomationProperties.Name="最大化或还原">
+            <PathIcon Name="MaxGlyph" Width="12" Height="12" Data="{StaticResource IcoMax}" />
+          </Button>
+          <Button Classes="captionbtn close" Click="OnCloseClick" ToolTip.Tip="关闭"
+                  AutomationProperties.Name="关闭窗口">
+            <PathIcon Width="12" Height="12" Data="{StaticResource IcoClose}" />
+          </Button>
+        </StackPanel>
+      </Grid>
+    </Grid>
+
+    <!-- ===== 主界面 ===== -->
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,*" IsVisible="{Binding IsMain}">
+
+      <!-- 左侧导航（可折叠） -->
+      <Border Grid.Column="0" Width="{Binding NavWidth}" ClipToBounds="True"
+              Background="{DynamicResource NavBg}"
+              BorderBrush="{DynamicResource WindowBorder}" BorderThickness="0,0,1,0">
+        <Grid RowDefinitions="*,Auto" Margin="8,10,8,10">
+
+          <StackPanel Grid.Row="0" Spacing="2">
+            <Button Classes="nav" Classes.selected="{Binding SearchVisible}"
+                    Command="{Binding GotoSearchCommand}" ToolTip.Tip="搜索"
+                    AutomationProperties.Name="搜索">
+              <Grid ColumnDefinitions="Auto,*">
+                <PathIcon Width="18" Height="18" Data="{StaticResource IcoSearch}" HorizontalAlignment="Left" />
+                <TextBlock Grid.Column="1" Text="搜索" Margin="10,0,0,0"
+                           VerticalAlignment="Center" IsVisible="{Binding NavExpanded}" />
+              </Grid>
+            </Button>
+
+            <Button Classes="nav" Classes.selected="{Binding IndexVisible}"
+                    Command="{Binding GotoIndexCommand}" ToolTip.Tip="索引"
+                    AutomationProperties.Name="索引">
+              <Grid ColumnDefinitions="Auto,*">
+                <PathIcon Width="18" Height="18" Data="{StaticResource IcoLayers}" HorizontalAlignment="Left" />
+                <TextBlock Grid.Column="1" Text="索引" Margin="10,0,0,0"
+                           VerticalAlignment="Center" IsVisible="{Binding NavExpanded}" />
+              </Grid>
+            </Button>
+
+            <Button Classes="nav" Classes.selected="{Binding SettingsVisible}"
+                    Command="{Binding GotoSettingsCommand}" ToolTip.Tip="设置"
+                    AutomationProperties.Name="设置">
+              <Grid ColumnDefinitions="Auto,*">
+                <PathIcon Width="18" Height="18" Data="{StaticResource IcoSettings}" HorizontalAlignment="Left" />
+                <TextBlock Grid.Column="1" Text="设置" Margin="10,0,0,0"
+                           VerticalAlignment="Center" IsVisible="{Binding NavExpanded}" />
+              </Grid>
+            </Button>
+          </StackPanel>
+
+          <StackPanel Grid.Row="1" Margin="4,0,0,2" Spacing="3"
+                      IsVisible="{Binding NavExpanded}">
+            <TextBlock Text="{Binding NavSummary}" Classes="caption" TextTrimming="CharacterEllipsis" />
+            <TextBlock Text="{Binding NavMemory}" Classes="caption" TextTrimming="CharacterEllipsis" />
+            <TextBlock Text="{Binding NavVersion}" Classes="caption" Opacity="0.7" />
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <!-- 中央内容 -->
+      <Grid Grid.Column="1">
+        <Grid IsVisible="{Binding SearchVisible}">
+          <views:SearchView DataContext="{Binding Search}" />
+        </Grid>
+        <Grid IsVisible="{Binding IndexVisible}">
+          <views:IndexView DataContext="{Binding Index}" />
+        </Grid>
+        <Grid IsVisible="{Binding SettingsVisible}">
+          <views:SettingsView DataContext="{Binding Settings}" />
+        </Grid>
+      </Grid>
+    </Grid>
+
+    <!-- 启动中 -->
+    <Grid Grid.Row="1" IsVisible="{Binding IsBoot}" RowDefinitions="*,Auto,*">
+      <StackPanel Grid.Row="1" HorizontalAlignment="Center" Spacing="12">
+        <ProgressBar IsIndeterminate="True" Width="200" Height="4"
+                     Background="{DynamicResource CardHover}"
+                     Foreground="{DynamicResource Accent}" />
+        <TextBlock Text="正在启动索引进程…" Classes="caption" HorizontalAlignment="Center" />
+      </StackPanel>
+    </Grid>
+
+    <!-- 首次引导 -->
+    <Grid Grid.Row="1" IsVisible="{Binding IsSetup}">
+      <views:SetupView DataContext="{Binding Setup}" />
+    </Grid>
+
+    <!-- ===== 底部状态栏 ===== -->
+    <Border Grid.Row="2" Background="{DynamicResource TitleBar}" Padding="14,7" MinHeight="34"
+            BorderBrush="{DynamicResource WindowBorder}" BorderThickness="0,1,0,0">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Grid.Column="0" Text="{Binding Search.StatusText}" Classes="small"
+                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+        <TextBlock Grid.Column="1" Text="{Binding Notice}" Classes="small"
+                   Foreground="{DynamicResource Warn}" VerticalAlignment="Center"
+                   TextTrimming="CharacterEllipsis" MaxWidth="620" Margin="16,0,0,0" />
+      </Grid>
+    </Border>
+
+    <!-- ===== 退出确认（托盘右键「退出」时弹出） ===== -->
+    <Grid Grid.RowSpan="3" Name="ConfirmOverlay" IsVisible="False" Background="#66000000">
+      <Border Background="{DynamicResource Card}" BorderBrush="{DynamicResource Stroke}"
+              BorderThickness="1" CornerRadius="12" Padding="22" Width="440"
+              HorizontalAlignment="Center" VerticalAlignment="Center"
+              BoxShadow="0 16 48 0 #40000000">
+        <StackPanel Spacing="16">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <Border Width="30" Height="30" CornerRadius="8" Background="{DynamicResource WarnSoft}">
+              <PathIcon Width="16" Height="16" Data="{StaticResource IcoWarn}"
+                        Foreground="{DynamicResource Warn}" />
+            </Border>
+            <TextBlock Text="退出 SnapFind？" FontSize="16" FontWeight="SemiBold"
+                       Foreground="{DynamicResource Text}" VerticalAlignment="Center" />
+          </StackPanel>
+
+          <TextBlock TextWrapping="Wrap" Classes="small" LineHeight="21"
+                     Text="退出后会停止索引进程，搜索功能将不可用（含托盘图标与全局热键）。已建立的索引数据会保留在磁盘上，下次启动可继续使用。" />
+
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+            <Button Classes="ghost" Name="ConfirmCancel" Content="取消" Click="OnConfirmCancel" />
+            <Button Classes="primary" Content="退出" Click="OnConfirmQuit" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+    </Grid>
+  </Grid>
+</Window>

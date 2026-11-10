@@ -1,0 +1,30 @@
+# ---- Rust ----
+/target
+# Cargo.lock 保留提交（可执行项目惯例：锁定依赖版本）
+
+# ---- 构建产物 / 发布包 ----
+/dist
+/.tools
+/.sandbox
+/.codebuddy
+
+# ---- .NET ----
+**/bin/
+**/obj/
+**/TestResults/
+*.user
+
+# ---- 运行期数据（本仓库根目录冒烟产生的索引/日志） ----
+/index
+**/*.db
+**/*.db-wal
+**/*.db-shm
+**/state.json
+**/state.json.tmp
+config.json.bak
+*.log.old
+
+# ---- IDE / 临时文件 ----
+.vs/
+.idea/
+.tmp-*

@@ -1,0 +1,47 @@
+[workspace]
+resolver = "2"
+# 桌面 UI 已迁移到 .NET/Avalonia（SnapFind.Desktop/），
+# 原 eframe GUI（snapfind-desktop）与独立托盘进程（snapfind-tray）已移除。
+members = [
+    "crates/snapfind-core",
+    "crates/snapfind-engine",
+    "crates/snapfind-indexd",
+    "crates/snapfind-cli",
+    "crates/snapfind-ipc-client",
+]
+
+[workspace.package]
+version = "0.2.0"
+edition = "2021"
+license = "Apache-2.0"
+rust-version = "1.82"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+thiserror = "2"
+tokio = { version = "1", features = [
+    "rt-multi-thread",
+    "net",
+    "io-util",
+    "sync",
+    "time",
+    "macros",
+] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+globset = "0.4"
+notify = "6"
+chardetng = "0.1"
+encoding_rs = "0.8"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+quick-xml = "0.36"
+sha2 = "0.10"
+rand = "0.8"
+clap = { version = "4", features = ["derive"] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true

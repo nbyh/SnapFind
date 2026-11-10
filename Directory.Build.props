@@ -1,0 +1,8 @@
+<Project>
+  <!-- 统一版本号：与 Cargo workspace（Cargo.toml [workspace.package]）保持一致。
+       关于页 / 导航栏显示的版本来自程序集版本（PlatformService.AppVersion），
+       修改版本号只需要改这里与 Cargo.toml 两处。 -->
+  <PropertyGroup>
+    <Version>0.2.0</Version>
+  </PropertyGroup>
+</Project>

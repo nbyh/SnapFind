@@ -1,0 +1,21 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="SnapFind.Desktop.App"
+             RequestedThemeVariant="Default">
+
+  <Application.Styles>
+    <FluentTheme />
+  </Application.Styles>
+
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <!-- 相对 URI：按本 XAML 所在程序集解析。不能写死 avares://SnapFind.Desktop/...，
+             否则 Linux 包把程序集改名 SnapFind（避免 .Desktop 被识别成桌面配置文件）时
+             XAML 编译器按旧名找不到程序集，直接 AVLN2000 编译失败。 -->
+        <ResourceInclude Source="/Theme/Palette.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </Application.Resources>
+
+</Application>

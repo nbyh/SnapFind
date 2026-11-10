@@ -1,0 +1,76 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <ResourceDictionary.ThemeDictionaries>
+
+    <ResourceDictionary x:Key="Dark">
+      <SolidColorBrush x:Key="Bg" Color="#1E1E22" />
+      <SolidColorBrush x:Key="Card" Color="#2A2A30" />
+      <!-- 标题栏 / 侧边导航 -->
+      <SolidColorBrush x:Key="TitleBar" Color="#16161A" />
+      <SolidColorBrush x:Key="NavBg" Color="#17171B" />
+      <SolidColorBrush x:Key="WindowBorder" Color="#303038" />
+      <SolidColorBrush x:Key="CloseHover" Color="#E81123" />
+      <SolidColorBrush x:Key="CardHover" Color="#383838" />
+      <SolidColorBrush x:Key="Input" Color="#3A3A3A" />
+      <SolidColorBrush x:Key="Stroke" Color="#3D3D3D" />
+      <SolidColorBrush x:Key="Text" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="Text2" Color="#D6D6D6" />
+      <SolidColorBrush x:Key="Accent" Color="#60CDFF" />
+      <SolidColorBrush x:Key="AccentSoft" Color="#243842" />
+      <SolidColorBrush x:Key="AccentBorder" Color="#3D8FB0" />
+      <SolidColorBrush x:Key="OnAccent" Color="#001A26" />
+      <SolidColorBrush x:Key="ControlBg" Color="#2D2D2D" />
+      <SolidColorBrush x:Key="ControlHover" Color="#383838" />
+      <SolidColorBrush x:Key="ControlActive" Color="#444444" />
+      <SolidColorBrush x:Key="Faint" Color="#3A3A3A" />
+      <SolidColorBrush x:Key="SelectionBg" Color="#1D4A5C" />
+      <SolidColorBrush x:Key="Good" Color="#6CCC5A" />
+      <SolidColorBrush x:Key="Warn" Color="#FFC83D" />
+      <SolidColorBrush x:Key="WarnSoft" Color="#3B3418" />
+      <SolidColorBrush x:Key="Bad" Color="#FF6B6B" />
+      <SolidColorBrush x:Key="MarkBg" Color="#FFD13D" />
+      <SolidColorBrush x:Key="MarkFg" Color="#000000" />
+      <!-- 预览标尺 -->
+      <SolidColorBrush x:Key="RulerHandle" Color="#80D6D6D6" />
+      <SolidColorBrush x:Key="FindMarkSoft" Color="#99FFC83D" />
+      <SolidColorBrush x:Key="FindMarkCurrent" Color="#FFC83D" />
+    </ResourceDictionary>
+
+    <ResourceDictionary x:Key="Light">
+      <SolidColorBrush x:Key="Bg" Color="#F4F4F7" />
+      <SolidColorBrush x:Key="Card" Color="#FFFFFF" />
+      <!-- 标题栏 / 侧边导航 -->
+      <SolidColorBrush x:Key="TitleBar" Color="#FAFAFC" />
+      <SolidColorBrush x:Key="NavBg" Color="#F7F7FA" />
+      <SolidColorBrush x:Key="WindowBorder" Color="#E3E3EA" />
+      <SolidColorBrush x:Key="CloseHover" Color="#E81123" />
+      <SolidColorBrush x:Key="CardHover" Color="#EFEFEF" />
+      <SolidColorBrush x:Key="Input" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="Stroke" Color="#DCDCDC" />
+      <SolidColorBrush x:Key="Text" Color="#1A1A1A" />
+      <SolidColorBrush x:Key="Text2" Color="#4A4A4A" />
+      <SolidColorBrush x:Key="Accent" Color="#0F6CBD" />
+      <SolidColorBrush x:Key="AccentSoft" Color="#E3EEF9" />
+      <SolidColorBrush x:Key="AccentBorder" Color="#7FB4DE" />
+      <SolidColorBrush x:Key="OnAccent" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="ControlBg" Color="#FAFAFA" />
+      <SolidColorBrush x:Key="ControlHover" Color="#F0F0F0" />
+      <SolidColorBrush x:Key="ControlActive" Color="#E6E6E6" />
+      <SolidColorBrush x:Key="Faint" Color="#F5F5F5" />
+      <SolidColorBrush x:Key="SelectionBg" Color="#CCE4F7" />
+      <SolidColorBrush x:Key="Good" Color="#107C10" />
+      <SolidColorBrush x:Key="Warn" Color="#965A00" />
+      <SolidColorBrush x:Key="WarnSoft" Color="#FDF3DC" />
+      <SolidColorBrush x:Key="Bad" Color="#C42B1C" />
+      <SolidColorBrush x:Key="MarkBg" Color="#FFE28A" />
+      <SolidColorBrush x:Key="MarkFg" Color="#1A1A1A" />
+      <!-- 预览标尺 -->
+      <SolidColorBrush x:Key="RulerHandle" Color="#804A4A4A" />
+      <SolidColorBrush x:Key="FindMarkSoft" Color="#99965A00" />
+      <SolidColorBrush x:Key="FindMarkCurrent" Color="#FF965A00" />
+    </ResourceDictionary>
+
+  </ResourceDictionary.ThemeDictionaries>
+
+</ResourceDictionary>
