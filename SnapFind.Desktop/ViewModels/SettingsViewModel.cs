@@ -15,9 +15,20 @@ public sealed partial class SettingsViewModel : ObservableObject
     public SettingsViewModel(ShellViewModel shell)
     {
         _shell = shell;
+        // 托盘是否可用在窗口 Opened 后才确定（StartTray 异步初始化），
+        // 跟随主 VM 通知刷新，避免设置页还停留在「平台不支持托盘」的旧状态
+        _shell.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ShellViewModel.TrayReady))
+            {
+                OnPropertyChanged(nameof(TraySupported));
+                OnPropertyChanged(nameof(AboutLine));
+            }
+        };
     }
 
-    public bool TraySupported => PlatformService.IsWindows;
+    /// <summary>托盘是否真实可用（窗口打开后由 TrayService 启动结果决定，跨平台）。</summary>
+    public bool TraySupported => _shell.TrayReady;
     public bool AutostartSupported => AutostartService.Supported;
     public string ConfigPath => _shell.Config.Path;
     public string VersionText => $"SnapFind v{PlatformService.AppVersion} · 本地全文搜索 · 不联网、不上传、无云端校验";
@@ -42,14 +53,25 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string _queryBudgetText = "10";
     [ObservableProperty] private string _queryBudgetError = "";
 
-    [ObservableProperty] private string _excludePathsText = "";
+    /// <summary>常用排除预设（与首次引导页同一数据源，按当前平台给出）。</summary>
+    public ObservableCollection<ExcludePresetOption> PresetOptions { get; } = new();
+
     [ObservableProperty] private string _excludeTypesText = "";
     [ObservableProperty] private string _excludeRulesText = "";
+
+    partial void OnExcludeRulesTextChanged(string value)
+    {
+        // 用户手改文本后重算勾选状态；_syncingPresets 防止回写循环
+        if (_syncingPresets) return;
+        ExcludePresets.SyncChecked(PresetOptions, value);
+    }
 
     [ObservableProperty] private bool _closeToTray = true;
     [ObservableProperty] private bool _autostart;
 
-    [ObservableProperty] private string _aboutLine = "";
+    public string AboutLine => TraySupported
+        ? "关闭窗口仅隐藏到托盘；从托盘「退出」才会关闭索引进程（保存至最近检查点）。"
+        : "关闭本窗口即关闭索引进程：先保存至最近检查点再退出，不会驻留后台。";
 
     public void Load()
     {
@@ -66,15 +88,11 @@ public sealed partial class SettingsViewModel : ObservableObject
             IoThrottleText = TextFromThrottle(cfg.IoThrottle);
             MemoryBudgetText = cfg.MemoryBudgetMb.ToString();
             QueryBudgetText = (cfg.QueryTimeoutMs / 1000).ToString();
-            ExcludePathsText = string.Join("\n", cfg.ExcludePaths);
             ExcludeTypesText = string.Join(", ", cfg.ExcludeTypes);
+            InitExcludePresets(cfg.ExcludeRules);
             ExcludeRulesText = string.Join("\n", cfg.ExcludeRules);
             CloseToTray = cfg.CloseToTray;
             Autostart = AutostartService.IsEnabled();
-
-            AboutLine = TraySupported
-                ? "关闭窗口仅隐藏到托盘；从托盘「退出」才会关闭索引进程（保存至最近检查点）。"
-                : "关闭本窗口即关闭索引进程：先保存至最近检查点再退出，不会驻留后台。";
         }
         finally
         {
@@ -294,9 +312,6 @@ public sealed partial class SettingsViewModel : ObservableObject
     [RelayCommand]
     private async Task SaveExcludesAsync()
     {
-        var paths = (ExcludePathsText ?? "")
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .ToList();
         var types = (ExcludeTypesText ?? "")
             .Split(new[] { ',', ';', '\n', '，', '；' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(t => t.TrimStart('.'))
@@ -306,7 +321,8 @@ public sealed partial class SettingsViewModel : ObservableObject
             .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .ToList();
 
-        _shell.Config.ExcludePaths = paths;
+        // 排除已统一为单一「规则」编辑器：paths 字段清空（旧片段已由启动迁移转为 glob）
+        _shell.Config.ExcludePaths = new List<string>();
         _shell.Config.ExcludeTypes = types;
         _shell.Config.ExcludeRules = rules;
         if (!_shell.TrySaveConfig()) return;
@@ -328,24 +344,52 @@ public sealed partial class SettingsViewModel : ObservableObject
     [RelayCommand]
     private async Task RestoreDefaultExcludesAsync()
     {
-        _shell.Config.ExcludePaths = new List<string> { "$Recycle.Bin", "RECYCLER", "System Volume Information" };
+        // 恢复默认 = 当前平台的常用排除预设（与首次引导预填一致）
+        var presets = ExcludePresets.Create();
+        var rules = presets.SelectMany(p => p.Rules).Distinct().ToList();
+
+        _shell.Config.ExcludePaths = new List<string>();
         _shell.Config.ExcludeTypes = new List<string>();
-        _shell.Config.ExcludeRules = new List<string>();
+        _shell.Config.ExcludeRules = rules;
         if (!_shell.TrySaveConfig()) return;
         Load();
 
         // 自定义 glob 规则只存在于索引进程内存里：只清磁盘不同步的话，
-        // 用户会看到输入框已清空、但那些规则仍在排除文件，直到重启才失效。
+        // 用户会看到输入框已重置、但旧规则仍在排除文件，直到重启才失效。
         try
         {
             await _shell.RequestAsync<VolumeActionAck>(Msg.VolumeAction,
-                new VolumeAction { Action = "setExcludes", Excludes = new List<string>() });
-            _shell.SetNotice("已恢复默认排除规则（回收站、系统卷信息、索引目录由内置规则自动排除）。");
+                new VolumeAction { Action = "setExcludes", Excludes = rules });
+            _shell.SetNotice("已恢复默认排除规则（系统目录、开发缓存、磁盘镜像；索引目录由内置规则自动排除）。");
         }
         catch
         {
             _shell.SetNotice("已恢复默认排除规则；索引进程未响应，重启 SnapFind 后完全生效。");
         }
+    }
+
+    // ---- 常用排除预设 ------------------------------------------------------
+
+    private bool _excludePresetsInitialized;
+    private bool _syncingPresets;
+
+    /// <summary>初始化预设勾选框（按现有规则文本回显；只初始化一次）。</summary>
+    private void InitExcludePresets(IReadOnlyList<string> rules)
+    {
+        if (_excludePresetsInitialized) return;
+        _excludePresetsInitialized = true;
+
+        foreach (var p in ExcludePresets.Create()) PresetOptions.Add(p);
+        ExcludePresets.SyncChecked(PresetOptions, string.Join("\n", rules));
+    }
+
+    /// <summary>勾选/取消一组预设：勾选 = 追加缺失规则；取消 = 从规则文本中移除。</summary>
+    [RelayCommand]
+    private void TogglePreset(ExcludePresetOption option)
+    {
+        _syncingPresets = true;
+        ExcludeRulesText = ExcludePresets.Toggle(option, ExcludeRulesText);
+        _syncingPresets = false;
     }
 
     [RelayCommand]

@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using SnapFind.Desktop.Helpers;
 using SnapFind.Desktop.Ipc;
+using SnapFind.Desktop.Services;
 
 namespace SnapFind.Desktop.ViewModels;
 
@@ -25,10 +26,15 @@ public sealed partial class SetupVolumeRow : ObservableObject
 public sealed partial class SetupViewModel : ObservableObject
 {
     private readonly ShellViewModel _shell;
+    private bool _excludePresetsInitialized;
+    private bool _syncingPresets;
 
     public SetupViewModel(ShellViewModel shell) => _shell = shell;
 
     public ObservableCollection<SetupVolumeRow> Rows { get; } = new();
+
+    /// <summary>常用排除预设（按当前操作系统给出；勾选状态与下方规则文本双向同步）。</summary>
+    public ObservableCollection<ExcludePresetOption> PresetOptions { get; } = new();
 
     [ObservableProperty] private string _excludesText = "";
     [ObservableProperty] private bool _busy;
@@ -36,6 +42,13 @@ public sealed partial class SetupViewModel : ObservableObject
     [ObservableProperty] private string _degradedReason = "";
     [ObservableProperty] private bool _hasDegraded;
     [ObservableProperty] private string _indexRoot = "";
+
+    partial void OnExcludesTextChanged(string value)
+    {
+        // 用户手改文本后重算勾选状态；_syncingPresets 防止回写循环
+        if (_syncingPresets) return;
+        ExcludePresets.SyncChecked(PresetOptions, value);
+    }
 
     public void ApplyScope(ScopePreview? scope)
     {
@@ -54,7 +67,9 @@ public sealed partial class SetupViewModel : ObservableObject
         // （config.json 的 index.exclude_rules）。scope.Excludes 还混着内置默认项
         // 与索引目录规则——那些是扫描时自动叠加的，不存配置，放进来会让用户
         // 保存出一堆「看起来是我配的」默认项，且和设置页对不上。
-        ExcludesText = string.Join("\n", _shell.Config.ExcludeRules);
+        var rules = _shell.Config.ExcludeRules;
+        InitExcludePresets(rules);
+        ExcludesText = string.Join("\n", rules);
 
         foreach (var v in scope.Volumes)
         {
@@ -136,4 +151,43 @@ public sealed partial class SetupViewModel : ObservableObject
 
     [RelayCommand]
     private void Skip() => _shell.EnterMain();
+
+    // ---- 常用排除预设 ------------------------------------------------------
+
+    /// <summary>
+    /// 初始化常用排除预设勾选框。首次使用（用户还没有任何自定义规则）时，
+    /// 预填当前平台的常用排除项并全部勾选，让「无关文件不进索引」开箱即得；
+    /// 已有规则的用户则按规则文本回显勾选状态。只初始化一次。
+    /// </summary>
+    private void InitExcludePresets(IReadOnlyList<string> rules)
+    {
+        if (_excludePresetsInitialized) return;
+        _excludePresetsInitialized = true;
+
+        foreach (var p in ExcludePresets.Create()) PresetOptions.Add(p);
+
+        var lines = ExcludePresets.ParseRules(string.Join("\n", rules));
+        if (lines.Count == 0)
+        {
+            // 首次使用：预填全部预设并勾选
+            var all = PresetOptions.SelectMany(p => p.Rules).ToList();
+            foreach (var p in PresetOptions) p.IsChecked = true;
+            _syncingPresets = true;
+            ExcludesText = string.Join("\n", all);
+            _syncingPresets = false;
+        }
+        else
+        {
+            ExcludePresets.SyncChecked(PresetOptions, ExcludesText);
+        }
+    }
+
+    /// <summary>勾选/取消一组预设：勾选 = 追加缺失规则；取消 = 从规则文本中移除。</summary>
+    [RelayCommand]
+    private void TogglePreset(ExcludePresetOption option)
+    {
+        _syncingPresets = true;
+        ExcludesText = ExcludePresets.Toggle(option, ExcludesText);
+        _syncingPresets = false;
+    }
 }

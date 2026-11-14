@@ -120,9 +120,59 @@ public sealed partial class ShellViewModel : ObservableObject
 
     // ---- 启动 ------------------------------------------------------------
 
+    /// <summary>
+    /// 一次性迁移/清理（幂等，可在每次启动执行）：
+    /// <list type="bullet">
+    /// <item>旧版把「路径片段」放 <c>index.exclude_paths</c>（子串匹配），统一为单一
+    /// 排除规则编辑器后，把**自定义**片段转换为等价 glob（<c>**/片段/**</c> 与
+    /// <c>**/片段</c>，按平台分隔符）并入规则，清空 paths 字段。</item>
+    /// <item>遗留默认片段（$Recycle.Bin、RECYCLER、System Volume Information）是
+    /// Windows 概念：Linux 上直接丢弃，不做转换；Windows 上转为任意盘符 glob
+    /// （内置默认只覆盖 C:\，任意盘符形态仍有价值）。</item>
+    /// <item>早期迁移曾在 Linux 上把上述 Windows 片段误转成 glob 写进配置，这里
+    /// 统一清掉（幂等）。</item>
+    /// </list>
+    /// 必须在拉起 indexd 之前执行：索引进程启动时读取一次规则。
+    /// </summary>
+    private void MigrateExcludePathsToRules()
+    {
+        var sep = Path.DirectorySeparatorChar;
+        var legacy = new[] { "$Recycle.Bin", "RECYCLER", "System Volume Information" };
+        var beforeRules = Config.ExcludeRules.ToList();
+        var beforePaths = Config.ExcludePaths.Count;
+        var rules = Config.ExcludeRules;
+
+        if (!OperatingSystem.IsWindows())
+        {
+            // 清掉早期迁移在 Linux 上误生成的 Windows 片段 glob（两种分隔符形态都清）
+            var junk = legacy.SelectMany(f => new[] { $"**/{f}/**", $"**/{f}", $@"**\{f}\**", $@"**\{f}" })
+                .ToHashSet();
+            rules = rules.Where(r => !junk.Contains(r)).ToList();
+        }
+
+        // 去掉与 Rust 内置默认重复的规则（内置扫描时自动叠加，写进配置纯属冗余）
+        rules = rules.Where(r => !Services.ExcludePresets.BuiltInDefaults.Contains(r)).ToList();
+
+        var paths = Config.ExcludePaths;
+        if (paths.Count > 0)
+        {
+            var toConvert = OperatingSystem.IsWindows() ? paths : paths.Except(legacy).ToList();
+            var globs = toConvert.SelectMany(f => new[] { $"**{sep}{f}{sep}**", $"**{sep}{f}" });
+            rules = rules.Concat(globs).Distinct().ToList();
+            Config.ExcludePaths = new List<string>();
+        }
+
+        if (!rules.SequenceEqual(beforeRules) || Config.ExcludePaths.Count != beforePaths)
+        {
+            Config.ExcludeRules = rules;
+            TrySaveConfig();
+        }
+    }
+
     public async Task InitializeAsync()
     {
         ApplyTheme(Config.Theme);
+        MigrateExcludePathsToRules();
 
         try
         {

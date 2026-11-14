@@ -280,6 +280,16 @@ public sealed partial class SearchViewModel : ObservableObject
         _ = RunSearchAsync();
     }
 
+    /// <summary>清空搜索框并立即复位结果（不走防抖，反馈更直接）。</summary>
+    [RelayCommand]
+    private void ClearQuery()
+    {
+        _debounce.Stop();
+        _dirty = false;
+        Query = "";
+        ResetResults();
+    }
+
     private async Task RunSearchAsync()
     {
         var q = (Query ?? "").Trim();

@@ -3,6 +3,8 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
+    <!-- 本机仅装了 .NET 10 运行时时允许向前滚动（Major），无需再装 8.0 运行时 -->
+    <RollForward>Major</RollForward>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>

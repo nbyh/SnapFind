@@ -71,10 +71,24 @@ public sealed class SingleInstance : IDisposable
 
         if (createdNew)
         {
-            return new SingleInstance(
-                mutex!,
-                new EventWaitHandle(false, EventResetMode.AutoReset, SettingsEventName),
-                new EventWaitHandle(false, EventResetMode.AutoReset, ExitEventName));
+            // .NET 在 Unix 上不支持「命名」EventWaitHandle（会抛
+            // PlatformNotSupportedException），降级为匿名事件：单实例互斥仍生效，
+            // 只是跨实例意图转发（设置/退出）在该平台上不可用。
+            try
+            {
+                return new SingleInstance(
+                    mutex!,
+                    new EventWaitHandle(false, EventResetMode.AutoReset, SettingsEventName),
+                    new EventWaitHandle(false, EventResetMode.AutoReset, ExitEventName));
+            }
+            catch (PlatformNotSupportedException ex)
+            {
+                Helpers.Log.Write($"named EventWaitHandle unsupported, fallback to local: {ex.Message}");
+                return new SingleInstance(
+                    mutex!,
+                    new EventWaitHandle(false, EventResetMode.AutoReset),
+                    new EventWaitHandle(false, EventResetMode.AutoReset));
+            }
         }
 
         // 已有实例：先让窗口可见（隐藏时它不处理事件），再转发意图

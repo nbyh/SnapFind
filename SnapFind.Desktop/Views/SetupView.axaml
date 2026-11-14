@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:SnapFind.Desktop.ViewModels"
+             xmlns:svc="using:SnapFind.Desktop.Services"
              x:Class="SnapFind.Desktop.Views.SetupView"
              x:DataType="vm:SetupViewModel">
 
@@ -69,12 +70,27 @@
       <Border Classes="card">
         <StackPanel Spacing="6">
           <TextBlock Text="3 · 排除规则（每行一条 glob，与设置页共用）" Classes="section" />
+          <ItemsControl ItemsSource="{Binding PresetOptions}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" Spacing="18" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="svc:ExcludePresetOption">
+                <CheckBox Content="{Binding Label}"
+                          IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                          Command="{Binding $parent[ItemsControl].((vm:SetupViewModel)DataContext).TogglePresetCommand}"
+                          CommandParameter="{Binding}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
           <TextBox Text="{Binding ExcludesText, Mode=TwoWay}" AcceptsReturn="True"
                    Height="140" FontFamily="Consolas" FontSize="13"
                    Watermark="例如：node_modules/**"
                    Background="{DynamicResource Input}" BorderBrush="{DynamicResource Stroke}" />
           <TextBlock Classes="caption" TextWrapping="Wrap"
-                     Text="这里保存的是你自定义的规则；内置默认排除（回收站、系统卷信息、索引目录）扫描时自动叠加，无需填写。" />
+                     Text="常用排除项勾选后写入下方规则，可再手动编辑；内置默认排除（回收站、系统目录、索引目录）扫描时自动叠加，无需填写。" />
         </StackPanel>
       </Border>
 

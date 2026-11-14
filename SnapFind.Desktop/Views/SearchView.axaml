@@ -13,8 +13,8 @@
       <Setter Property="BorderBrush" Value="{DynamicResource Stroke}" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="7" />
-      <Setter Property="Height" Value="28" />
-      <Setter Property="Padding" Value="10,2" />
+      <Setter Property="MinHeight" Value="30" />
+      <Setter Property="Padding" Value="10,3" />
       <Setter Property="FontSize" Value="13" />
       <Setter Property="Margin" Value="0,0,6,6" />
     </Style>
@@ -25,6 +25,22 @@
       <Setter Property="Background" Value="{DynamicResource AccentSoft}" />
       <Setter Property="Foreground" Value="{DynamicResource Text}" />
       <Setter Property="BorderBrush" Value="{DynamicResource AccentBorder}" />
+    </Style>
+
+    <Style Selector="Button.clear">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Width" Value="26" />
+      <Setter Property="Height" Value="26" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Foreground" Value="{DynamicResource Text2}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Margin" Value="0,0,6,0" />
+    </Style>
+    <Style Selector="Button.clear:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource ControlHover}" />
+      <Setter Property="Foreground" Value="{DynamicResource Text}" />
     </Style>
 
     <!-- 表头列 -->
@@ -106,11 +122,18 @@
           <TextBox Grid.Column="0" Name="QueryBox"
                    Text="{Binding Query, Mode=TwoWay}"
                    KeyDown="OnQueryKeyDown"
-                   FontSize="15" Height="36" MinHeight="36" VerticalContentAlignment="Center"
+                   FontSize="15" MinHeight="38" VerticalContentAlignment="Center"
                    CornerRadius="8"
-                   Watermark="搜索文件名、路径或内容：AND/OR/NOT、&quot;短语&quot;、通配符、name: / ext:" />
+                   Watermark="搜索文件名、路径或内容：AND/OR/NOT、&quot;短语&quot;、通配符、name: / ext:">
+            <TextBox.InnerRightContent>
+              <Button Classes="clear" Content="✕" TabIndex="5"
+                      IsVisible="{Binding Query, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                      Command="{Binding ClearQueryCommand}"
+                      ToolTip.Tip="清空搜索框" />
+            </TextBox.InnerRightContent>
+          </TextBox>
           <Button Grid.Column="1" Classes="primary" Content="搜索"
-                  Command="{Binding SearchNowCommand}" Height="36" Padding="20,4" />
+                  Command="{Binding SearchNowCommand}" MinHeight="38" Padding="20,4" />
           <ProgressBar Grid.Column="2" IsVisible="{Binding Searching}" IsIndeterminate="True"
                        Width="34" Height="4" VerticalAlignment="Center" />
         </Grid>
@@ -150,12 +173,12 @@
           </ItemsControl>
 
           <StackPanel Orientation="Horizontal" Spacing="8">
-            <ToggleButton Content="路径筛选" FontSize="13" Height="28"
+            <ToggleButton Content="路径筛选" FontSize="13" MinHeight="30"
                           IsChecked="{Binding PathFilterOpen, Mode=TwoWay}"
                           ToolTip.Tip="只搜索某个目录及其子目录（可选，默认不限）" />
             <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding PathFilterOpen}">
               <TextBlock Text="限定路径" Classes="caption" VerticalAlignment="Center" />
-              <TextBox Width="300" Height="28" MinHeight="28" FontSize="13"
+              <TextBox Width="300" MinHeight="30" FontSize="13"
                        Text="{Binding PathFilter, Mode=TwoWay}"
                        Watermark="例如 D:\docs（留空 = 不限）" />
               <TextBlock Text="只搜索该目录及其子目录" Classes="caption" VerticalAlignment="Center" />
@@ -362,7 +385,7 @@
               <TextBlock Grid.Column="0" Text="正文预览（本机直读全文）" Classes="small"
                          VerticalAlignment="Center" />
               <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                <Button Classes="ghost" Content="查找 Ctrl+F" FontSize="12" Height="26"
+                <Button Classes="ghost" Content="查找 Ctrl+F" FontSize="12" MinHeight="28"
                         Click="OnFindOpenClick" />
                 <TextBlock Text="{Binding LineCountText}" Classes="small" VerticalAlignment="Center" />
               </StackPanel>
@@ -373,25 +396,25 @@
                     CornerRadius="7" Background="{DynamicResource ControlBg}"
                     BorderBrush="{DynamicResource Stroke}" BorderThickness="1">
               <WrapPanel Orientation="Horizontal">
-                <TextBox Name="FindBox" Width="170" Height="30" MinHeight="30" FontSize="12.5"
+                <TextBox Name="FindBox" Width="170" MinHeight="32" FontSize="12.5"
                          Margin="0,0,8,6" VerticalAlignment="Top"
                          Text="{Binding FindText, Mode=TwoWay}" Watermark="在正文中查找"
                          KeyDown="OnFindBoxKeyDown" />
-                <ToggleButton Content="Aa" Height="30" MinHeight="30" MinWidth="40" Padding="9,0"
+                <ToggleButton Content="Aa" MinHeight="32" MinWidth="40" Padding="9,0"
                               Margin="0,0,6,6" FontSize="12" VerticalAlignment="Top"
                               IsChecked="{Binding FindMatchCase, Mode=TwoWay}"
                               ToolTip.Tip="区分大小写" />
-                <ToggleButton Content="全字" Height="30" MinHeight="30" Padding="10,0"
+                <ToggleButton Content="全字" MinHeight="32" Padding="10,0"
                               Margin="0,0,8,6" FontSize="12" VerticalAlignment="Top"
                               IsChecked="{Binding FindWholeWord, Mode=TwoWay}"
                               ToolTip.Tip="全字匹配（整词）" />
                 <TextBlock Text="{Binding FindCounter}" Classes="small"
                            Margin="0,0,8,6" VerticalAlignment="Center" />
-                <Button Classes="ghost" Content="上一个" FontSize="12" Height="30" Margin="0,0,6,6"
+                <Button Classes="ghost" Content="上一个" FontSize="12" MinHeight="30" Margin="0,0,6,6"
                         Click="OnFindPrevClick" />
-                <Button Classes="ghost" Content="下一个" FontSize="12" Height="30" Margin="0,0,6,6"
+                <Button Classes="ghost" Content="下一个" FontSize="12" MinHeight="30" Margin="0,0,6,6"
                         Click="OnFindNextClick" />
-                <Button Classes="ghost" Content="关闭" FontSize="12" Height="30" Margin="0,0,0,6"
+                <Button Classes="ghost" Content="关闭" FontSize="12" MinHeight="30" Margin="0,0,0,6"
                         Click="OnFindCloseClick" />
               </WrapPanel>
             </Border>

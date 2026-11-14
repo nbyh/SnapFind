@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:SnapFind.Desktop.ViewModels"
+             xmlns:svc="using:SnapFind.Desktop.Services"
              x:Class="SnapFind.Desktop.Views.SettingsView"
              x:DataType="vm:SettingsViewModel">
 
@@ -29,7 +30,7 @@
           <TextBlock Text="搜索" Classes="section" />
           <StackPanel Orientation="Horizontal" Spacing="8">
             <TextBlock Text="查询时间预算（秒）" Classes="caption" VerticalAlignment="Center" />
-            <TextBox Width="70" Height="28" MinHeight="28" FontSize="13"
+            <TextBox Width="70" MinHeight="30" FontSize="13"
                      Text="{Binding QueryBudgetText, Mode=TwoWay}"
                      LostFocus="OnQueryBudgetLostFocus" />
             <Button Classes="ghost" Content="保存" Command="{Binding SaveQueryBudgetCommand}" />
@@ -48,7 +49,7 @@
           <CheckBox Content="每日定时增量索引（只补新增/变更文件，不重复抽取）"
                     IsChecked="{Binding DailyScan, Mode=TwoWay}" />
           <StackPanel Orientation="Horizontal" Spacing="8">
-            <TextBox Width="80" Height="28" MinHeight="28" FontSize="13"
+            <TextBox Width="80" MinHeight="30" FontSize="13"
                      Text="{Binding DailyScanAt, Mode=TwoWay}"
                      LostFocus="OnDailyScanAtLostFocus" />
             <TextBlock Classes="caption" VerticalAlignment="Center"
@@ -70,7 +71,7 @@
           <TextBlock Classes="caption"
                      Text="索引目录（留空 = 程序目录下的 index；保存后点下方「重启索引服务」生效）" />
           <StackPanel Orientation="Horizontal" Spacing="8">
-            <TextBox Width="440" Height="28" MinHeight="28" FontSize="13"
+            <TextBox Width="440" MinHeight="30" FontSize="13"
                      Text="{Binding IndexRootEdit, Mode=TwoWay}"
                      Watermark="例如 D:\SnapFindIndex" />
             <Button Classes="ghost" Content="保存" Command="{Binding SaveIndexRootCommand}" />
@@ -88,17 +89,17 @@
                      Text="每个磁盘卷对应一个独立的 vol-&lt;id&gt;/ 目录（state.json、docs.db、segments/），互不影响；默认全部卷同时开始索引。" />
           <StackPanel Orientation="Horizontal" Spacing="8">
             <TextBlock Text="同时索引的卷数" Classes="caption" VerticalAlignment="Center" />
-            <ComboBox Width="220" Height="28" MinHeight="28"
+            <ComboBox Width="220" MinHeight="30"
                       ItemsSource="{Binding ParallelOptions}"
                       SelectedItem="{Binding ParallelVolumes, Mode=TwoWay}" />
           </StackPanel>
           <StackPanel Orientation="Horizontal" Spacing="8">
             <TextBlock Text="IO 限速档位" Classes="caption" VerticalAlignment="Center" />
-            <ComboBox Width="120" Height="28" MinHeight="28"
+            <ComboBox Width="120" MinHeight="30"
                       ItemsSource="{Binding ThrottleOptions}"
                       SelectedItem="{Binding IoThrottleText, Mode=TwoWay}" />
             <TextBlock Text="内存预算（MB）" Classes="caption" VerticalAlignment="Center" Margin="16,0,0,0" />
-            <TextBox Width="90" Height="28" MinHeight="28" FontSize="13"
+            <TextBox Width="90" MinHeight="30" FontSize="13"
                      Text="{Binding MemoryBudgetText, Mode=TwoWay}"
                      LostFocus="OnMemoryBudgetLostFocus" />
             <Button Classes="ghost" Content="保存" Command="{Binding SaveMemoryBudgetCommand}" />
@@ -114,26 +115,37 @@
           <TextBlock Text="索引排除" Classes="section" />
           <TextBlock Classes="caption" TextWrapping="Wrap"
                      Text="命中的文件/目录在扫描时直接跳过；保存后，下一次扫描或增量索引即生效，无需重启。" />
+          <ItemsControl ItemsSource="{Binding PresetOptions}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" Spacing="18" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="svc:ExcludePresetOption">
+                <CheckBox Content="{Binding Label}"
+                          IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                          Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).TogglePresetCommand}"
+                          CommandParameter="{Binding}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
           <TextBlock Classes="caption"
-                     Text="排除路径（每行一条：目录名或路径片段，路径中包含即跳过，大小写不敏感）" />
-          <TextBox Text="{Binding ExcludePathsText, Mode=TwoWay}" AcceptsReturn="True"
-                   Height="96" FontFamily="Consolas" FontSize="13"
-                   Watermark="$Recycle.Bin" />
+                     Text="排除规则（每行一条 glob，与首次引导页共用；如 node_modules/**）" />
+          <TextBox Text="{Binding ExcludeRulesText, Mode=TwoWay}" AcceptsReturn="True"
+                   Height="140" FontFamily="Consolas" FontSize="13"
+                   Watermark="node_modules/**"
+                   Background="{DynamicResource Input}" BorderBrush="{DynamicResource Stroke}" />
           <TextBlock Classes="caption"
                      Text="排除文件类型（扩展名，不含点；可用逗号、分号或换行分隔）" />
-          <TextBox Text="{Binding ExcludeTypesText, Mode=TwoWay}" Height="28" MinHeight="28"
+          <TextBox Text="{Binding ExcludeTypesText, Mode=TwoWay}" MinHeight="30"
                    FontSize="13" Watermark="tmp, temp, bak" />
-          <TextBlock Classes="caption"
-                     Text="排除规则（每行一条 glob，如 node_modules/**；与首次引导的排除列表相同）" />
-          <TextBox Text="{Binding ExcludeRulesText, Mode=TwoWay}" AcceptsReturn="True"
-                   Height="72" FontFamily="Consolas" FontSize="13"
-                   Watermark="node_modules/**" />
           <StackPanel Orientation="Horizontal" Spacing="8">
             <Button Classes="primary" Content="保存排除规则" Command="{Binding SaveExcludesCommand}" />
             <Button Classes="ghost" Content="恢复默认" Command="{Binding RestoreDefaultExcludesCommand}" />
           </StackPanel>
           <TextBlock Classes="caption" TextWrapping="Wrap"
-                     Text="内置默认已排除任意盘符的 $Recycle.Bin 与系统卷信息目录，以及索引目录自身——这些不在上面的列表里，扫描时自动叠加。" />
+                     Text="勾选常用项会写入上方规则，可再手动编辑；内置默认排除（回收站、系统目录、索引目录自身）扫描时自动叠加，无需填写。" />
         </StackPanel>
       </Border>
 

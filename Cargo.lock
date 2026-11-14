@@ -960,7 +960,7 @@ checksum = "d0d5d4b1981b8bbbb7aed204cae5726d683d5d6ac7e74ec54122ea28f315e7c8"
 
 [[package]]
 name = "snapfind-cli"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -974,7 +974,7 @@ dependencies = [
 
 [[package]]
 name = "snapfind-core"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "libc",
@@ -988,7 +988,7 @@ dependencies = [
 
 [[package]]
 name = "snapfind-engine"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "chardetng",
@@ -1009,7 +1009,7 @@ dependencies = [
 
 [[package]]
 name = "snapfind-indexd"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -1022,7 +1022,7 @@ dependencies = [
 
 [[package]]
 name = "snapfind-ipc-client"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "rand",

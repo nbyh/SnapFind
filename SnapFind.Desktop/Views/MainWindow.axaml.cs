@@ -16,6 +16,7 @@ public partial class MainWindow : Window
     private HotkeyService? _hotkey;
     private bool _reallyClose;
     private bool _initialized;
+    private bool _noSystemDecorations;
 
     public MainWindow(ShellViewModel shell, bool startMinimized)
     {
@@ -25,6 +26,23 @@ public partial class MainWindow : Window
         DataContext = shell;
 
         try { Icon = TrayService.CreateIcon(); } catch { /* 图标非关键 */ }
+
+        // Linux 上 fontconfig 默认回退到的字体（Latin 用 DejaVu、中文随机回退）
+        // 笔画明显偏细偏淡；显式指定常用黑体族并把整窗字重提到 Medium，
+        // 让观感接近 Windows（Segoe UI / 微软雅黑）。Windows 保持默认。
+        if (!OperatingSystem.IsWindows())
+        {
+            FontFamily = new Avalonia.Media.FontFamily(
+                "Noto Sans CJK SC, Source Han Sans SC, WenQuanYi Micro Hei, Noto Sans, DejaVu Sans");
+            FontWeight = Avalonia.Media.FontWeight.Medium;
+
+            // X11 后端忽略 ExtendClientAreaChromeHints="NoChrome"（空实现），
+            // WM 仍会画自己的标题栏按钮，与自绘标题栏叠成两行。
+            // 直接关掉系统装饰；拖动/双击最大化由自绘标题栏承担，
+            // 边缘调整大小见 OnPointerMoved/OnPointerPressed 的补齐逻辑。
+            _noSystemDecorations = true;
+            SystemDecorations = SystemDecorations.None;
+        }
 
         _shell.ShowWindowRequested += ShowFromTray;
         _shell.HideWindowRequested += HideToTray;
@@ -91,6 +109,65 @@ public partial class MainWindow : Window
             ? WindowState.Normal
             : WindowState.Maximized;
 
+    // ---- 无边框窗口的边缘调整大小 ----------------------------------------
+    // SystemDecorations=None 后 WM 不再提供边缘缩放，自行补齐：
+    // 指针靠近窗口边缘时改光标，按下即 BeginResizeDrag（X11 走
+    // _NET_WM_MOVERESIZE 交给 WM 处理，无边框同样有效）。
+
+    private const double EdgeHit = 6;
+
+    private WindowEdge? HitTestEdge(Point p)
+    {
+        if (p.X < EdgeHit)
+        {
+            if (p.Y < EdgeHit) return WindowEdge.NorthWest;
+            if (p.Y > Bounds.Height - EdgeHit) return WindowEdge.SouthWest;
+            return WindowEdge.West;
+        }
+        if (p.X > Bounds.Width - EdgeHit)
+        {
+            if (p.Y < EdgeHit) return WindowEdge.NorthEast;
+            if (p.Y > Bounds.Height - EdgeHit) return WindowEdge.SouthEast;
+            return WindowEdge.East;
+        }
+        if (p.Y < EdgeHit) return WindowEdge.North;
+        if (p.Y > Bounds.Height - EdgeHit) return WindowEdge.South;
+        return null;
+    }
+
+    private void UpdateResizeCursor(Point p)
+    {
+        Cursor = HitTestEdge(p) switch
+        {
+            WindowEdge.North => new Cursor(StandardCursorType.TopSide),
+            WindowEdge.South => new Cursor(StandardCursorType.BottomSide),
+            WindowEdge.West => new Cursor(StandardCursorType.LeftSide),
+            WindowEdge.East => new Cursor(StandardCursorType.RightSide),
+            WindowEdge.NorthWest => new Cursor(StandardCursorType.TopLeftCorner),
+            WindowEdge.NorthEast => new Cursor(StandardCursorType.TopRightCorner),
+            WindowEdge.SouthWest => new Cursor(StandardCursorType.BottomLeftCorner),
+            WindowEdge.SouthEast => new Cursor(StandardCursorType.BottomRightCorner),
+            _ => Cursor.Default,
+        };
+    }
+
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        if (_noSystemDecorations && WindowState == WindowState.Normal)
+            UpdateResizeCursor(e.GetPosition(this));
+        base.OnPointerMoved(e);
+    }
+
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    {
+        if (_noSystemDecorations && WindowState == WindowState.Normal
+            && HitTestEdge(e.GetPosition(this)) is { } edge)
+        {
+            BeginResizeDrag(edge, e);
+        }
+        base.OnPointerPressed(e);
+    }
+
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
@@ -113,7 +190,10 @@ public partial class MainWindow : Window
 
     private void StartTray()
     {
-        if (!PlatformService.IsWindows || !_shell.Config.TrayEnabled) return;
+        // TrayService 用的是 Avalonia 内置跨平台 TrayIcon（Linux 走 DBus
+        // StatusNotifierItem，KDE/UKUI 原生支持，GNOME 需 AppIndicator 扩展），
+        // 不再限定 Windows。托盘起不来时 TrayReady=false，关窗会直接退出并提示。
+        if (!_shell.Config.TrayEnabled) return;
 
         try
         {

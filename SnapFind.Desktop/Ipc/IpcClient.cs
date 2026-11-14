@@ -99,11 +99,15 @@ public sealed class IpcClient : IAsyncDisposable
             ?? throw new FileNotFoundException(
                 "找不到 snapfind-indexd.exe。请先构建 Rust 侧，或把本程序与 indexd 放在同一目录。");
 
-        // pin 由「本进程 id + 随机数」组成，端点名为 \\.\pipe\snapfind-{pin}，
-        // 生成规则必须与 snapfind_core::platform::ipc_endpoint 一致。
+        // pin 由「本进程 id + 随机数」组成，生成规则必须与 snapfind_core::platform::ipc_endpoint 一致。
         var pin = $"{Environment.ProcessId}-{Random.Shared.Next(0, 100_000)}";
         var token = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
-        var endpoint = $@"\\.\pipe\snapfind-{pin}";
+        // 端点：Windows 为命名管道 \\.\pipe\snapfind-{pin}；
+        // Linux 为 UDS 绝对路径 $XDG_RUNTIME_DIR/snapfind-{uid}/{pin}.sock
+        //（无 XDG_RUNTIME_DIR 时 /tmp/snapfind-{uid}/{pin}.sock），与 Rust 侧完全一致。
+        var endpoint = OperatingSystem.IsWindows()
+            ? $@"\\.\pipe\snapfind-{pin}"
+            : BuildUnixSocketEndpoint(pin);
 
         // R3-2：先把 indexd 的 stderr 落盘位置定下来。解析顺序与 indexd 侧一致：
         // 显式传入 > config.index.root > **indexd 可执行文件同级** index/
@@ -167,6 +171,33 @@ public sealed class IpcClient : IAsyncDisposable
         public int ExitCode { get; } = exitCode;
     }
 
+    /// <summary>
+    /// 计算 Linux 下的 UDS 端点路径，与 <c>snapfind_core::platform::runtime_dir/ipc_endpoint</c> 保持一致：
+    /// 有 XDG_RUNTIME_DIR 时为 <c>$XDG_RUNTIME_DIR/{pin}.sock</c>（直接用运行时目录本身），
+    /// 否则 <c>/tmp/snapfind-{uid}/{pin}.sock</c>；/tmp 回退目录不存在则创建并设 0700。
+    /// </summary>
+    private static string BuildUnixSocketEndpoint(string pin)
+    {
+        var runtimeDir = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR");
+        if (!string.IsNullOrWhiteSpace(runtimeDir))
+        {
+            return Path.Combine(runtimeDir, $"{pin}.sock");
+        }
+
+        var uid = getuid();
+        var dir = Path.Combine("/tmp", $"snapfind-{uid}");
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.SetUnixFileMode(dir, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+        catch { /* 权限尽力而为 */ }
+        return Path.Combine(dir, $"{pin}.sock");
+    }
+
+    [System.Runtime.InteropServices.DllImport("libc")]
+    private static extern uint getuid();
+
     private static async Task<IpcClient> SpawnAndConnectAsync(
         ProcessStartInfo psi, string endpoint, string token, CancellationToken ct)
     {
@@ -193,7 +224,10 @@ public sealed class IpcClient : IAsyncDisposable
 
         // 必须用 Asynchronous：同步模式下客户端写入在 UI 线程上会被阻塞
         // （实测 hello 帧 233 字节就卡死，界面随之冻结）。
-        var pipe = new NamedPipeClientStream(".", Path.GetFileName(endpoint), PipeDirection.InOut, PipeOptions.Asynchronous);
+        // Unix 上 NamedPipeClientStream 的 pipeName 即 UDS socket 路径，
+        // 必须传完整绝对路径（不能像 Windows 那样 GetFileName 只留管道名）。
+        var pipeName = OperatingSystem.IsWindows() ? Path.GetFileName(endpoint) : endpoint;
+        var pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
         try
         {
             var connected = false;
