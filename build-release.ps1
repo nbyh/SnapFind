@@ -225,12 +225,21 @@ $(if ($rid -like 'linux-*') { "桌面启动 : ./install.sh 一键安装（或参
         tar -czf "SnapFind-$rid.tar.gz" "$rid"
         Pop-Location
     }
+
+    # 5.5 Debian 包（.deb）：纯 Python 组装（scripts/make-deb.py），无 dpkg 环境也能打；
+    #     结构已用 dpkg-deb -I/-c 与 WSL 实装验证。产物装到 /opt/snapfind 并注册应用菜单。
+    if ($rid -like 'linux-*') {
+        $debArch = if ($rid -eq 'linux-x64') { 'amd64' } else { 'arm64' }
+        python (Join-Path $Root 'scripts\make-deb.py') --src $out --arch $debArch `
+            --out (Join-Path $Dist "SnapFind-$rid.deb") --version $cargoVer
+        if ($LASTEXITCODE -ne 0) { throw "[$rid] deb 打包失败" }
+    }
     Write-Host "[$rid] 完成 → $out"
 }
 
 # ---- 校验和：dist\SHA256SUMS.txt 覆盖全部压缩包 -----------------------
 # Linux 侧可直接 `sha256sum -c SHA256SUMS.txt`（行格式与 GNU sha256sum 兼容）
-$sums = Get-ChildItem $Dist -File | Where-Object { $_.Name -match '\.(zip|tar\.gz)$' } |
+$sums = Get-ChildItem $Dist -File | Where-Object { $_.Name -match '\.(zip|tar\.gz|deb)$' } |
     ForEach-Object {
         $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
         "$hash  $($_.Name)"
