@@ -35,7 +35,7 @@ Name=SnapFind
 Comment=SnapFind local full-text search
 Exec=/opt/snapfind/SnapFind
 Path=/opt/snapfind
-Icon=/usr/share/icons/hicolor/256x256/apps/snapfind.png
+Icon=snapfind
 Terminal=false
 Categories=Utility;
 """
@@ -43,16 +43,44 @@ Categories=Utility;
 POSTINST = """\
 #!/bin/sh
 set -e
+# 刷新桌面数据库与图标主题缓存，确保开始菜单立即出现图标
 if command -v update-desktop-database >/dev/null 2>&1; then
     update-desktop-database /usr/share/applications || true
+fi
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+    gtk-update-icon-cache -f -t /usr/share/icons/hicolor || true
+fi
+# 为执行安装的用户在桌面放置快捷方式（sudo 安装时取 SUDO_USER）
+DESK_USER="${SUDO_USER:-$USER}"
+if [ -n "$DESK_USER" ] && [ "$DESK_USER" != "root" ]; then
+    DESK_DIR=$(getent passwd "$DESK_USER" | cut -d: -f6)/Desktop
+    if [ -d "$DESK_DIR" ] || mkdir -p "$DESK_DIR" 2>/dev/null; then
+        install -m 644 -o "$DESK_USER" /usr/share/applications/snapfind.desktop \\
+            "$DESK_DIR/snapfind.desktop" || true
+        # GNOME 系桌面需要 trusted 标记才直接可双击（尽力而为）
+        if command -v gio >/dev/null 2>&1; then
+            su - "$DESK_USER" -s /bin/sh -c \\
+                "gio set '$DESK_DIR/snapfind.desktop' metadata::trusted true" \\
+                >/dev/null 2>&1 || true
+        fi
+    fi
 fi
 """
 
 POSTRM = """\
 #!/bin/sh
 set -e
+# 移除桌面快捷方式并刷新缓存
+DESK_USER="${SUDO_USER:-$USER}"
+if [ -n "$DESK_USER" ] && [ "$DESK_USER" != "root" ]; then
+    DESK_DIR=$(getent passwd "$DESK_USER" | cut -d: -f6)/Desktop
+    rm -f "$DESK_DIR/snapfind.desktop"
+fi
 if command -v update-desktop-database >/dev/null 2>&1; then
     update-desktop-database /usr/share/applications || true
+fi
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+    gtk-update-icon-cache -f -t /usr/share/icons/hicolor || true
 fi
 """
 

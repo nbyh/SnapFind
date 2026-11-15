@@ -21,12 +21,15 @@ H2 = (186 * SS, 186 * SS)     # 柄终点
 
 
 def rounded_square_dist(x, y):
-    """到圆角方块内部的符号距离（<0 在内部）。方块 [0,256]^2，圆角 R。"""
-    cx = min(max(x, R), N - R)
-    cy = min(max(y, R), N - R)
-    if R <= x <= N - R or R <= y <= N - R:
-        return max(R - x, x - (N - R), R - y, y - (N - R))
-    return math.hypot(x - cx, y - cy) - R
+    """到圆角方块的标准 SDF（<0 在内部）。方块 [0,N]^2，圆角 R。
+    q = |p - center| - (半边长 - R)；dist = len(max(q,0)) + min(max(qx,qy),0) - R
+    """
+    c = N / 2
+    qx = abs(x - c) - (c - R)
+    qy = abs(y - c) - (c - R)
+    dx = max(qx, 0.0)
+    dy = max(qy, 0.0)
+    return math.hypot(dx, dy) + min(max(qx, qy), 0.0) - R
 
 
 def seg_dist(px, py, a, b):
@@ -71,6 +74,9 @@ def main(path):
             cnt = as_ // 255  # 命中样本数（决定覆盖度/alpha）
             if cnt:
                 row += bytes((rs // cnt, gs // cnt, bs // cnt, as_ // n))
+            else:
+                # 完全透明也必须写满 4 字节，否则扫描线错位、整张 PNG 损坏
+                row += b"\x00\x00\x00\x00"
         rows.append(bytes(row))
 
     def chunk(tag, data):
