@@ -40,6 +40,20 @@ Terminal=false
 Categories=Utility;
 """
 
+RESOLVE_DESK_DIR = """\
+# 以目标用户身份解析真实桌面目录（本地化系统常为 ~/桌面 而非 ~/Desktop）：
+# 1) su 为该用户跑 xdg-user-dir；2) 解析其 user-dirs.dirs；3) 回退 $HOME/Desktop
+DESK_DIR=$(su - "$DESK_USER" -s /bin/sh -c 'xdg-user-dir DESKTOP' 2>/dev/null)
+if [ -z "$DESK_DIR" ]; then
+    UH=$(getent passwd "$DESK_USER" | cut -d: -f6)
+    if [ -f "$UH/.config/user-dirs.dirs" ]; then
+        DESK_DIR=$(grep -m1 "^XDG_DESKTOP_DIR=" "$UH/.config/user-dirs.dirs" \\
+            | sed "s|^XDG_DESKTOP_DIR=||; s|\\"||g; s|\\$HOME|$UH|")
+    fi
+fi
+[ -n "$DESK_DIR" ] || DESK_DIR=$(getent passwd "$DESK_USER" | cut -d: -f6)/Desktop
+"""
+
 POSTINST = """\
 #!/bin/sh
 set -e
@@ -53,8 +67,8 @@ fi
 # 为执行安装的用户在桌面放置快捷方式（sudo 安装时取 SUDO_USER）
 DESK_USER="${SUDO_USER:-$USER}"
 if [ -n "$DESK_USER" ] && [ "$DESK_USER" != "root" ]; then
-    DESK_DIR=$(getent passwd "$DESK_USER" | cut -d: -f6)/Desktop
-    if [ -d "$DESK_DIR" ] || mkdir -p "$DESK_DIR" 2>/dev/null; then
+""" + RESOLVE_DESK_DIR + """\
+    if [ -n "$DESK_DIR" ] && mkdir -p "$DESK_DIR" 2>/dev/null; then
         install -m 644 -o "$DESK_USER" /usr/share/applications/snapfind.desktop \\
             "$DESK_DIR/snapfind.desktop" || true
         # GNOME 系桌面需要 trusted 标记才直接可双击（尽力而为）
@@ -73,8 +87,10 @@ set -e
 # 移除桌面快捷方式并刷新缓存
 DESK_USER="${SUDO_USER:-$USER}"
 if [ -n "$DESK_USER" ] && [ "$DESK_USER" != "root" ]; then
-    DESK_DIR=$(getent passwd "$DESK_USER" | cut -d: -f6)/Desktop
+""" + RESOLVE_DESK_DIR + """\
     rm -f "$DESK_DIR/snapfind.desktop"
+    # 兼容旧版误建的 ~/Desktop/snapfind.desktop
+    rm -f "$(getent passwd "$DESK_USER" | cut -d: -f6)/Desktop/snapfind.desktop"
 fi
 if command -v update-desktop-database >/dev/null 2>&1; then
     update-desktop-database /usr/share/applications || true
@@ -175,7 +191,7 @@ def build(src: str, arch: str, version: str, out: str):
             f"{0:<12}"
             f"{0:<6}"
             f"{0:<6}"
-            f"{0o100644:<8}"
+            f"{'100644':<8}"
             f"{len(data):<10}"
             "`\n"
         ).encode()
