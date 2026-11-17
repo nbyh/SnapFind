@@ -24,7 +24,7 @@
 | 过滤器与排序 | ✅ | 类型、大小区间、修改时间、路径限定；相关度 / 名称 / 大小 / 修改时间升降序 |
 | 高亮与片段 | ✅ | 命中上下文窗口，先转义再插 `<mark>`，UTF-16 偏移 |
 | 中文分词 | ✅ | bigram 滑窗，索引与查询共用同一分词器 |
-| 内容抽取 | ✅ | 纯文本/代码/日志/Markdown/HTML/RTF/PDF、OOXML（DOCX/XLSX/PPTX）、EPUB、OLE2 老式 Office；不可读类型（exe/dll/媒体/压缩包）只索引文件名与路径 |
+| 内容抽取 | ✅ | 纯文本/代码/日志/Markdown/LaTeX（tex/bib）/轻量标记（rst/adoc/org）/字幕（srt/ass/vtt/lrc）/日历联系人邮件（ics/vcf/eml）；HTML/RTF/PDF；OOXML（DOCX/XLSX/PPTX 及模板宏变体 DOTM/XLTX/XLTM/PPSM/POTX）；EPUB；ODF（ODT/ODS/ODP，LibreOffice）；OLE2 老式 Office（DOC/XLS/PPT）；WPS Office（WPS/ET/DPS，含模板）。Office 容器按**魔数二次识别**，改名文件/新版 WPS 存 zip 也不会走错管线；不可读类型（exe/dll/媒体/压缩包）只索引文件名与路径 |
 | 索引目录降级 | ✅ | 首选 `<程序目录>/index`，不可写时降级到用户数据目录并给出原因码 |
 | 断点续建 | ✅ | `state.json` 原子写；重启按 mtime+size 跳过未变文件，不重复抽取 |
 | 增量索引 | ✅ | `notify` 监控 + 1s 去抖；未变更文件只 stat |

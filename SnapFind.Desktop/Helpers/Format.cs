@@ -91,15 +91,15 @@ public static class Format
         var e = (ext ?? "").TrimStart('.').ToLowerInvariant();
         return e switch
         {
-            "doc" or "docx" or "rtf" or "odt" or "wps" => Color.Parse("#1E88E5"),
-            "xls" or "xlsx" or "csv" or "ods" => Color.Parse("#43A047"),
-            "ppt" or "pptx" or "odp" => Color.Parse("#FB8C00"),
+            "doc" or "docx" or "dotx" or "dotm" or "rtf" or "odt" or "ott" or "wps" or "wpt" => Color.Parse("#1E88E5"),
+            "xls" or "xlsx" or "xlsm" or "xltx" or "xltm" or "csv" or "ods" or "ots" or "et" or "ett" => Color.Parse("#43A047"),
+            "ppt" or "pptx" or "ppsx" or "ppsm" or "potx" or "odp" or "otp" or "odg" or "dps" or "dpt" => Color.Parse("#FB8C00"),
             "pdf" or "xps" or "djvu" => Color.Parse("#E53935"),
             "rs" or "py" or "js" or "ts" or "c" or "h" or "cpp" or "java" or "go" or "cs" or "rb"
-                or "php" or "swift" or "kt" => Color.Parse("#2E7D32"),
+                or "php" or "swift" or "kt" or "tex" or "rst" or "adoc" or "org" or "diff" or "patch" => Color.Parse("#2E7D32"),
             "html" or "htm" or "css" or "scss" or "vue" or "svelte" => Color.Parse("#00BCD4"),
             "json" or "yaml" or "yml" or "toml" or "ini" or "xml" => Color.Parse("#00897B"),
-            "txt" or "md" or "log" or "nfo" => Color.Parse("#607D8B"),
+            "txt" or "md" or "log" or "nfo" or "srt" or "ass" or "vtt" or "lrc" or "ics" or "vcf" or "eml" => Color.Parse("#607D8B"),
             "png" or "jpg" or "jpeg" or "gif" or "webp" or "svg" or "psd" or "bmp" or "ico"
                 => Color.Parse("#8E24AA"),
             "mp3" or "mp4" or "mkv" or "wav" or "flac" or "avi" or "mov" => Color.Parse("#F4511E"),

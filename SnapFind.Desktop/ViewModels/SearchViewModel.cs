@@ -48,6 +48,7 @@ public sealed partial class SearchViewModel : ObservableObject
     {
         "txt", "md", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
         "pdf", "rtf", "csv", "json", "ini", "cfg", "log", "xml", "html", "epub",
+        "odt", "ods", "odp", "wps", "et", "dps", "tex",
     };
 
     /// <summary>可预览（内容可抽取）的扩展名，用于「更多」里的第一段。</summary>
@@ -56,8 +57,13 @@ public sealed partial class SearchViewModel : ObservableObject
         "txt", "md", "log", "nfo", "ini", "cfg", "conf", "env", "properties",
         "json", "yaml", "yml", "toml", "xml", "csv", "tsv",
         "html", "htm", "css", "scss", "less", "vue", "svelte",
-        "doc", "docx", "rtf", "odt", "wps", "xls", "xlsx", "ods", "ppt", "pptx", "odp",
-        "pdf", "epub", "mobi", "azw3", "chm",
+        "doc", "docx", "dotx", "dotm", "rtf", "odt", "ott",
+        "wps", "wpt", "et", "ett", "dps", "dpt",
+        "xls", "xlsx", "xlsm", "xltx", "xltm", "ods", "ots",
+        "ppt", "pptx", "ppsx", "ppsm", "potx", "odp", "otp", "odg",
+        "pdf", "epub",
+        "tex", "bib", "rst", "adoc", "org", "srt", "ass", "vtt", "lrc", "ics", "vcf", "eml",
+        "diff", "patch",
         "rs", "py", "js", "jsx", "ts", "tsx", "c", "h", "cc", "cpp", "hpp", "cs",
         "java", "go", "rb", "php", "swift", "kt", "lua", "sh", "bat", "ps1", "sql",
     };

@@ -60,14 +60,25 @@ pub fn ext_of(path: &Path) -> String {
 
 /// 所有可抽取正文的扩展名（UI 的「类型」多选标签也用这份清单）。
 ///
-/// 含老式 OLE2 Office（`doc` / `xls` / `ppt`）：没有 XML 部件，
-/// 由 `ole_text` 做可打印文本兜底抽取，能预览也能全文检索。
+/// 二进制容器一律**按魔数二次识别**（见 [`ContainerKind`]）：扩展名只决定
+/// 「要不要尝试抽取」，实际走 zip 还是 OLE2 管线由文件头决定——这样
+/// 「docx 改名成 .doc」「新版 WPS 把 .wps 存成 zip」都不会走错管线。
+///
+/// - 老式 OLE2 Office（`doc`/`xls`/`ppt`）与 WPS Office（`wps`/`et`/`dps`，
+///   含模板）：OLE2 复合文档家族，`ole_text` 可打印文本兜底。`.wps` 与
+///   Microsoft Works 文档同名，但 Works 同为 OLE2 结构，本抽取器都适用。
+/// - ODF（`odt`/`ods`/`odp` 及模板）：LibreOffice 默认格式，zip + content.xml。
 pub const SUPPORTED_EXTS: &[&str] = &[
     "txt", "text", "log", "csv", "tsv", "ini", "cfg", "conf", "toml", "yaml", "yml", "json",
     "xml", "rs", "py", "js", "mjs", "cjs", "ts", "tsx", "jsx", "go", "c", "h", "cc", "cpp",
     "hpp", "java", "kt", "cs", "rb", "php", "swift", "sh", "bash", "zsh", "ps1", "sql", "md",
-    "markdown", "html", "htm", "xhtml", "rtf", "pdf", "docx", "dotx", "xlsx", "xlsm", "pptx",
-    "ppsx", "epub", "doc", "dot", "xls", "xlt", "ppt", "pps", "pot",
+    "markdown", "html", "htm", "xhtml", "rtf", "pdf", "docx", "dotx", "dotm", "xlsx", "xlsm",
+    "xltx", "xltm", "pptx", "ppsx", "ppsm", "potx", "epub", "doc", "dot", "xls", "xlt", "ppt",
+    "pps", "pot", "wps", "wpt", "et", "ett", "dps", "dpt", "odt", "ods", "odp", "ott", "ots",
+    "otp", "odg",
+    // 纯文本补充：LaTeX、轻量标记、字幕/歌词、日历/联系人/邮件、补丁
+    "tex", "bib", "rst", "adoc", "org", "srt", "ass", "vtt", "lrc", "ics", "vcf", "eml",
+    "diff", "patch",
 ];
 
 /// 是否支持对内容做抽取（不支持时仍索引文件名与路径）。
@@ -85,8 +96,10 @@ pub fn extract(path: &Path, limits: &Limits) -> Result<ExtractedText, ExtractErr
     // 读入上限据此收紧，避免把超大日志/CSV 整读进内存。PDF/Office 需整体解析，仍用 max_bytes。
     let plain_ext = !matches!(
         ext.as_str(),
-        "pdf" | "docx" | "dotx" | "xlsx" | "xlsm" | "pptx" | "ppsx" | "epub" | "doc" | "dot"
-            | "xls" | "xlt" | "ppt" | "pps" | "pot"
+        "pdf" | "docx" | "dotx" | "dotm" | "xlsx" | "xlsm" | "xltx" | "xltm" | "pptx" | "ppsx"
+            | "ppsm" | "potx" | "epub" | "doc" | "dot" | "xls" | "xlt" | "ppt" | "pps" | "pot"
+            | "wps" | "wpt" | "et" | "ett" | "dps" | "dpt"
+            | "odt" | "ods" | "odp" | "ott" | "ots" | "otp" | "odg"
     );
     let read_cap = if plain_ext {
         (limits.max_text_bytes.saturating_mul(2) + 64 * 1024).min(limits.max_bytes)
@@ -94,6 +107,7 @@ pub fn extract(path: &Path, limits: &Limits) -> Result<ExtractedText, ExtractErr
         limits.max_bytes
     };
     let (bytes, read_truncated) = read_limited(path, read_cap)?;
+    let kind = container_kind(&bytes);
 
     let mut out = match ext.as_str() {
         "html" | "htm" | "xhtml" => {
@@ -128,19 +142,51 @@ pub fn extract(path: &Path, limits: &Limits) -> Result<ExtractedText, ExtractErr
                 encoding: "pdf-cmap".into(),
             }
         }
-        "docx" | "dotx" | "xlsx" | "xlsm" | "pptx" | "ppsx" | "epub" => {
-            let text = office_text(&bytes, &ext)?;
+        // —— Office 二进制容器：一律魔数先行，扩展名只做初筛 ——
+        //
+        // zip 容器（OOXML / ODF / EPUB）：老式扩展名（.doc/.wps/.et/.dps…）或
+        // 模板/宏变体（.xltx/.dotm…）映射到对应部件过滤器。覆盖两种真实情况：
+        // ① 新版 WPS 把 .wps/.et/.dps 存成 zip（OOXML 结构）；② 用户把 docx
+        // 改名成 .doc 之类。OLE2 家族扩展名若内容真是 zip 就走这里。
+        "docx" | "dotx" | "dotm" | "xlsx" | "xlsm" | "xltx" | "xltm" | "pptx" | "ppsx"
+        | "ppsm" | "potx" | "epub" | "doc" | "dot" | "xls" | "xlt" | "ppt" | "pps" | "pot"
+        | "wps" | "wpt" | "et" | "ett" | "dps" | "dpt" | "odt" | "ods" | "odp" | "ott"
+        | "ots" | "otp" | "odg"
+            if kind == ContainerKind::Zip =>
+        {
+            let filter_ext = match ext.as_str() {
+                "doc" | "dot" | "wps" | "wpt" => "docx",
+                "xls" | "xlt" | "et" | "ett" | "xltx" | "xltm" => "xlsx",
+                "ppt" | "pps" | "pot" | "dps" | "dpt" | "ppsm" | "potx" => "pptx",
+                other => other,
+            };
+            let text = office_text(&bytes, filter_ext)?;
             ExtractedText {
                 text,
                 truncated: read_truncated,
                 encoding: "zip+xml".into(),
             }
         }
-        "doc" | "dot" | "xls" | "xlt" | "ppt" | "pps" | "pot" => ExtractedText {
-            text: ole_text(&bytes),
-            truncated: read_truncated,
-            encoding: "ole-text".into(),
-        },
+        // OLE2 容器（doc/xls/ppt 老式 + WPS 三件套 + Works）：可打印文本兜底
+        "doc" | "dot" | "xls" | "xlt" | "ppt" | "pps" | "pot"
+        | "wps" | "wpt" | "et" | "ett" | "dps" | "dpt"
+            if kind == ContainerKind::Ole2 =>
+        {
+            ExtractedText {
+                text: ole_text(&bytes),
+                truncated: read_truncated,
+                encoding: "ole-text".into(),
+            }
+        }
+        // 声称是 Office 但容器对不上（内容损坏 / 被替换成纯文本），明确失败
+        // 而不是把 XML 标签混进索引——与其它损坏文件的处理路径一致
+        "docx" | "dotx" | "dotm" | "xlsx" | "xlsm" | "xltx" | "xltm" | "pptx" | "ppsx"
+        | "ppsm" | "potx" | "epub" | "doc" | "dot" | "xls" | "xlt" | "ppt" | "pps" | "pot"
+        | "wps" | "wpt" | "et" | "ett" | "dps" | "dpt" | "odt" | "ods" | "odp" | "ott"
+        | "ots" | "otp" | "odg" =>
+        {
+            return Err(ExtractError::Failed("office container mismatch".into()))
+        }
         _ => {
             let s = decode(&bytes);
             ExtractedText {
@@ -181,6 +227,33 @@ fn read_limited(path: &Path, max: usize) -> Result<(Vec<u8>, bool), ExtractError
         }
     }
     Ok((buf, truncated))
+}
+
+/// 文件头魔数识别的容器类型。扩展名只决定「要不要尝试」，实际管线由此决定。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ContainerKind {
+    /// zip：OOXML（docx/xlsx/pptx 及模板/宏变体）、ODF（odt/ods/odp）、EPUB、
+    /// 新版 WPS 存成 zip 的 .wps/.et/.dps
+    Zip,
+    /// OLE2 复合文档：老式 doc/xls/ppt、WPS 三件套、Microsoft Works
+    Ole2,
+    /// PDF（`%PDF-`）
+    Pdf,
+    /// 其它（纯文本 / 未知二进制）
+    Other,
+}
+
+fn container_kind(bytes: &[u8]) -> ContainerKind {
+    const OLE2_MAGIC: [u8; 8] = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
+    if bytes.starts_with(b"PK\x03\x04") || bytes.starts_with(b"PK\x05\x06") {
+        ContainerKind::Zip // \x05\x06 是空 zip（EOCD 起头），也交给 zip 管线报错
+    } else if bytes.starts_with(&OLE2_MAGIC) {
+        ContainerKind::Ole2
+    } else if bytes.starts_with(b"%PDF") {
+        ContainerKind::Pdf
+    } else {
+        ContainerKind::Other
+    }
 }
 
 /// 老式 OLE2 Office（`doc`/`xls`/`ppt`）没有可解析的 XML 部件，这里做
@@ -500,12 +573,15 @@ fn office_text(bytes: &[u8], ext: &str) -> Result<String, ExtractError> {
     let wanted: Vec<String> = names
         .into_iter()
         .filter(|n| match ext {
-            "docx" | "dotx" => n.starts_with("word/") && n.ends_with(".xml") && !n.contains("theme"),
-            "xlsx" | "xlsm" => {
+            "docx" | "dotx" | "dotm" => {
+                n.starts_with("word/") && n.ends_with(".xml") && !n.contains("theme")
+            }
+            "xlsx" | "xlsm" | "xltx" | "xltm" => {
                 (n.starts_with("xl/sharedStrings") || n.starts_with("xl/worksheets/"))
                     && n.ends_with(".xml")
             }
-            "pptx" | "ppsx" => n.starts_with("ppt/slides/") && n.ends_with(".xml"),
+            "pptx" | "ppsx" | "ppsm" | "potx" => n.starts_with("ppt/slides/") && n.ends_with(".xml"),
+            "odt" | "ods" | "odp" | "ott" | "ots" | "otp" | "odg" => n == "content.xml",
             "epub" => n.ends_with(".xhtml") || n.ends_with(".html") || n.ends_with(".htm"),
             _ => false,
         })
@@ -527,6 +603,11 @@ fn office_text(bytes: &[u8], ext: &str) -> Result<String, ExtractError> {
         let text = String::from_utf8_lossy(&buf);
         if ext == "epub" {
             out.push_str(&strip_html(&text));
+        } else if matches!(
+            ext,
+            "odt" | "ods" | "odp" | "ott" | "ots" | "otp" | "odg"
+        ) {
+            out.push_str(&odf_text(&text));
         } else {
             out.push_str(&xml_text(&text));
         }
@@ -587,6 +668,44 @@ fn xml_text(xml: &str) -> String {
     out
 }
 
+/// ODF（`odt`/`ods`/`odp`…）的 `content.xml`：文本不像 OOXML 包在 `<w:t>` 里，
+/// 而是直接位于 `<text:p>` / `<text:h>` / 表格单元格的**字符数据**中。
+/// 收集全部字符数据（属性不在 Text 事件里，不会泄漏），按段落/行/单元格断行。
+fn odf_text(xml: &str) -> String {
+    use quick_xml::events::Event;
+    use quick_xml::reader::Reader;
+
+    let mut reader = Reader::from_str(xml);
+    reader.config_mut().trim_text(true);
+    let mut out = String::new();
+    let mut buf = Vec::new();
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Text(t)) => {
+                if let Ok(s) = t.unescape() {
+                    // 全空白串多为标签间的缩进换行，跳过避免噪音
+                    if !s.chars().all(char::is_whitespace) {
+                        out.push_str(&s);
+                        out.push(' ');
+                    }
+                }
+            }
+            Ok(Event::End(e)) => {
+                let local = e.name().local_name();
+                // text:p / text:h 段落结束、table:row/table:cell 行与单元格结束 → 换行
+                if matches!(local.as_ref(), b"p" | b"h" | b"row" | b"cell") {
+                    out.push('\n');
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(_) => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -619,11 +738,128 @@ mod tests {
 
     #[test]
     fn legacy_office_is_previewable() {
-        for ext in ["doc", "dot", "xls", "xlt", "ppt", "pps", "pot", "md"] {
+        for ext in [
+            "doc", "dot", "xls", "xlt", "ppt", "pps", "pot", "md",
+            // WPS Office 自有格式（OLE2 家族）
+            "wps", "wpt", "et", "ett", "dps", "dpt",
+            // OOXML 模板/宏变体与 ODF
+            "dotm", "xltx", "xltm", "ppsm", "potx", "odt", "ods", "odp", "ott", "ots", "otp",
+            "odg",
+            // 纯文本补充
+            "tex", "rst", "adoc", "srt", "ics", "eml",
+        ] {
             assert!(is_supported(ext), "{ext} 应可预览");
         }
         assert!(!is_supported("exe"));
         assert!(!is_supported("dll"));
+    }
+
+    use std::io::Write as _;
+
+    /// 构造最小 zip（抽取器只按成员路径过滤，不需要合法 [Content_Types].xml）
+    fn build_zip(entries: &[(&str, &str)]) -> Vec<u8> {
+        let mut buf = std::io::Cursor::new(Vec::new());
+        let mut w = zip::ZipWriter::new(&mut buf);
+        let opts = zip::write::SimpleFileOptions::default();
+        for (name, body) in entries {
+            w.start_file(*name, opts).unwrap();
+            w.write_all(body.as_bytes()).unwrap();
+        }
+        w.finish().unwrap();
+        buf.into_inner()
+    }
+
+    fn write_fixture(name: &str, bytes: &[u8]) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "snapfind-extract-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join(name);
+        std::fs::write(&p, bytes).unwrap();
+        p
+    }
+
+    const DOC_XML: &str = "<w:document xmlns:w=\"urn:x\"><w:body><w:p><w:t>magic zip routing</w:t></w:p></w:body></w:document>";
+    const CONTENT_XML: &str = "<office:document-content xmlns:office=\"urn:oasis:names:tc:opendocument:xmlns:office:1.0\" xmlns:text=\"urn:oasis:names:tc:opendocument:xmlns:text:1.0\"><office:body><office:text><text:p>odf magic body</text:p><text:p>second para</text:p></office:text></office:body></office:document-content>";
+
+    fn extract_bytes(name: &str, bytes: &[u8]) -> Result<ExtractedText, ExtractError> {
+        let p = write_fixture(name, bytes);
+        extract(&p, &Limits::default())
+    }
+
+    /// docx 内容被改名成 .doc：魔数是 zip → 按 OOXML 管线抽取，而不是 ole_text
+    #[test]
+    fn magic_routes_zip_named_doc() {
+        let bytes = build_zip(&[("word/document.xml", DOC_XML)]);
+        let out = extract_bytes("renamed.doc", &bytes).unwrap();
+        assert!(out.text.contains("magic zip routing"), "got: {}", out.text);
+        assert_eq!(out.encoding, "zip+xml");
+    }
+
+    /// 新版 WPS 把 .wps 存成 zip（OOXML 结构）→ 走 docx 过滤器
+    #[test]
+    fn wps_saved_as_zip() {
+        let bytes = build_zip(&[("word/document.xml", DOC_XML)]);
+        let out = extract_bytes("modern.wps", &bytes).unwrap();
+        assert!(out.text.contains("magic zip routing"), "got: {}", out.text);
+    }
+
+    /// WPS 三件套的 OLE2 形态：魔数命中 → ole_text 兜底
+    #[test]
+    fn ole2_wps_fallback() {
+        const OLE2: [u8; 8] = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
+        let mut bytes = OLE2.to_vec();
+        bytes.extend([0x00u8, 0x02, 0xFF]);
+        bytes.extend("wps ole body".encode_utf16().flat_map(u16::to_le_bytes));
+        let out = extract_bytes("legacy.wps", &bytes).unwrap();
+        assert!(out.text.contains("wps ole body"), "got: {}", out.text);
+        assert_eq!(out.encoding, "ole-text");
+    }
+
+    /// ODF：content.xml 的裸字符数据被完整收集，段落断行
+    #[test]
+    fn odt_content_xml() {
+        let bytes = build_zip(&[("content.xml", CONTENT_XML)]);
+        let out = extract_bytes("doc.odt", &bytes).unwrap();
+        assert!(out.text.contains("odf magic body"), "got: {}", out.text);
+        assert!(out.text.contains("second para"), "got: {}", out.text);
+    }
+
+    /// 模板/宏变体走对应部件过滤器
+    #[test]
+    fn ooxml_variants() {
+        let sst = "<sst xmlns=\"urn:x\"><si><t>sheet magic</t></si></sst>";
+        let out = extract_bytes("t.xltx", &build_zip(&[("xl/sharedStrings.xml", sst)])).unwrap();
+        assert!(out.text.contains("sheet magic"), "got: {}", out.text);
+
+        let out = extract_bytes("t.xltm", &build_zip(&[("xl/sharedStrings.xml", sst)])).unwrap();
+        assert!(out.text.contains("sheet magic"), "got: {}", out.text);
+    }
+
+    /// Office 扩展名 + 内容不是 zip/OLE2 → 明确报错，不把垃圾文本混进索引
+    #[test]
+    fn container_mismatch_fails() {
+        let err = extract_bytes("fake.docx", b"plain text not an office file").unwrap_err();
+        assert!(matches!(err, ExtractError::Failed(m) if m.contains("mismatch")));
+    }
+
+    /// 纯文本补充格式按原样解码
+    #[test]
+    fn plain_text_additions() {
+        for (name, body, needle) in [
+            ("note.tex", r"\section{zanzibar tex}", "zanzibar tex"),
+            ("sub.srt", "1\n00:00:01,000 --> 00:00:02,000\nzanzibar srt", "zanzibar srt"),
+            ("mail.eml", "Subject: zanzibar eml\r\n\r\nbody here", "zanzibar eml"),
+            ("cal.ics", "BEGIN:VCALENDAR\r\nSUMMARY:zanzibar ics", "zanzibar ics"),
+        ] {
+            let out = extract_bytes(name, body.as_bytes()).unwrap();
+            assert!(out.text.contains(needle), "{name}: {}", out.text);
+        }
     }
 
     /// 老式 OLE 正文多存为 UTF-16LE，xls 也常有纯 ASCII 串。
