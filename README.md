@@ -7,7 +7,7 @@
 - 界面：.NET 8 + Avalonia 原生绘制（无 Web/HTML 前端、无内嵌浏览器），WinUI/Fluent 风格，深浅主题
 - 关闭界面即关闭索引进程（落检查点后退出），不驻留后台
 
-> 当前版本 **v1.0.0**。功能清单见[特性](#特性)，安装与使用见[快速开始](#快速开始)，配置生效时机见[配置参考](#配置参考)，已知问题见[已知限制与已知问题](#已知限制与已知问题)，设计基线见 [`docs/DEV.md`](docs/DEV.md)。
+> 当前版本 **v2.0.0**。功能清单见[特性](#特性)，安装与使用见[快速开始](#快速开始)，配置生效时机见[配置参考](#配置参考)，已知问题见[已知限制与已知问题](#已知限制与已知问题)，设计基线见 [`docs/DEV.md`](docs/DEV.md)。
 
 ---
 
@@ -67,7 +67,7 @@
 sudo dpkg -i SnapFind-linux-x64.deb   # arm64 设备用 arm64 包
 ```
 
-自动安装到 `/opt/snapfind` 并注册应用菜单与图标；卸载 `sudo dpkg -r snapfind`。
+自动安装到 `/opt/snapfind`，注册应用菜单（hicolor 图标 + 图标缓存刷新），并为安装用户创建桌面快捷方式（自动适配本地化桌面目录，如中文系统的 `~/桌面`）；卸载 `sudo dpkg -r snapfind`（桌面快捷方式一并清理）。
 
 **方式二：tar.gz 手动解压**
 
@@ -89,7 +89,7 @@ sudo apt install libx11-6 libxrandr2 libxi6 libxcursor1 libice6 libsm6 libfontco
 sudo dnf install libX11 libXrandr libXi libXcursor libICE libSM fontconfig
 ```
 
-放进应用菜单：执行包内 `./install.sh` 一键安装到 `~/.local/opt/snapfind` 并注册菜单项；不想用脚本时也可手动改 `snapfind.desktop.template` 里的 `Exec=` / `Path=` 后复制到 `~/.local/share/applications/snapfind.desktop`。
+放进应用菜单：执行包内 `./install.sh` 一键安装到 `~/.local/opt/snapfind`，注册菜单项、安装图标并按 `xdg-user-dir DESKTOP` 创建桌面快捷方式；不想用脚本时也可手动改 `snapfind.desktop.template` 里的 `Exec=` / `Path=` 后复制到 `~/.local/share/applications/snapfind.desktop`。
 
 > 纯终端 / SSH 环境没有图形会话，无法启动界面；请用 `snapfind` 命令行。
 
@@ -104,7 +104,7 @@ sudo dnf install libX11 libXrandr libXi libXcursor libICE libSM fontconfig
 | 搜索页 | 大输入框（回车即搜）+ 类型多选标签（数字为本次命中数，仅在已加载结果内筛选）+ 可展开的路径筛选；结果表首列序号可恢复相关度排序，表头点击即排序（本地重排，不重新搜索） |
 | 预览面板 | 默认 460px，可拉伸 360–680px；命中片段高亮 + 全文预览（本机直读，>32MB 才截断）；按宽度自动软换行；右侧 18px 滚动条以灰色滑块/蓝色关键词标记/橙色 Ctrl+F 标记定位；支持 Ctrl+F 查找、打开、定位、复制路径 |
 | 索引页 | 范围表列出全部盘符与已添加目录；可勾选「索引所选」、「索引全部固定盘」、「重新扫描磁盘」、添加任意目录；每范围一张进度卡（进度、吞吐、ETA、暂停/继续/重建/清理并删除；自定义目录另有「移除」）；卡片上方统一显示 `IO 限速 <档位>（全部卷共享）· 合计读写 x/秒` |
-| 设置页 | 主题、索引计划（每日定时增量 + 触发时刻 + 启动续跑）、索引目录、同时索引的卷数、索引排除（路径片段 / 文件类型 / glob 规则）、关闭到托盘、开机自启、整理分段、关于 |
+| 设置页 | 主题、索引计划（每日定时增量 + 触发时刻 + 启动续跑）、索引目录、同时索引的卷数、索引排除（文件类型 / glob 规则 + 按平台预设）、关闭到托盘、开机自启、整理分段、关于 |
 | 系统托盘 | 双击恢复窗口；右键「显示 / 设置 / 退出」；单击无动作；`Ctrl+Alt+F` 全局唤起；重复启动会唤起已有窗口（`--exit` 可优雅退出） |
 
 ### 命令行
@@ -178,9 +178,9 @@ snapfind shutdown
 | `index.throttle` | `low` | **需重启索引服务** | ✅ | IO 节流档位：`off` / `low`(80 文件·6MB/s) / `medium`(240·24MB) / `high`(600·96MB)；索引进程级、所有卷共享。设置页「IO 限速档位」（低/中/高/关闭） |
 | `index.memory_budget_bytes` | 1 GiB | **需重启索引服务** | ✅ | RSS 预算：≥75% 正文截到 256 KiB，≥100% 只索引文件名/路径。设置页「内存预算（MB）」（256–4096） |
 | `index.max_text_bytes_per_file` | 2 MiB | **需重启** | ❌ | 单文件正文上限（L1 降级时进一步压到 256 KiB） |
-| `index.exclude_paths` | 回收站等 3 项 | 热生效（每次扫描重读） | ✅ | 路径片段，命中即跳过整棵子树，大小写不敏感 |
+| `index.exclude_paths` | —（已废弃） | 启动时幂等迁移：自定义片段转为等价 glob 并入 `exclude_rules` 后清空本字段 | ❌（配置 v2 移除） | 旧「路径片段」机制；遗留 Windows 片段（`$Recycle.Bin` 等）在 Linux 直接丢弃、Windows 转为任意盘符 glob |
 | `index.exclude_types` | 空 | 热生效 | ✅ | 扩展名（不含点） |
-| `index.exclude_rules` | 空 | 热生效（UI 保存时经 IPC 同步） | ✅（与首次引导共用） | glob 规则，如 `node_modules/**`；内置默认项与索引目录规则扫描时自动叠加，不写入此字段 |
+| `index.exclude_rules` | 空 | 热生效（UI 保存时经 IPC 同步） | ✅（与首次引导共用） | glob 规则，如 `node_modules/**`；内置默认项与索引目录规则扫描时自动叠加，不写入此字段；启动迁移会清掉与内置重复及平台错位的旧规则，设置页预设只列内置没有的增量项（按平台区分） |
 | `index.follow_symlinks` | `false` | 需重启 | ❌ | 是否跟随符号链接 |
 | `index.checkpoint_every_files` / `_every_ms` | 5000 / 30000 | 运行时 | ❌ | 检查点落盘阈值（或关系） |
 | `extract.max_bytes_per_file` | 64 MiB | 需重启 | ❌ | 抽取读取上限 |
@@ -264,11 +264,21 @@ dotnet run   --project SnapFind.Desktop
 # 产物：zip / tar.gz / .deb（Linux）+ SHA256SUMS.txt，全部在 dist/
 ./build-release.ps1
 ./build-release.ps1 -Only win-x64     # 只构建某平台（增量调试用）
+
+# Linux 单平台本机构建（不依赖 Windows；步骤与 ps1 等价）
+# 1) 引擎：x64 用 cargo build --release；arm64 用 zig 交叉编译（musl 静态链接）
+#    pip install ziglang==0.13.0 && cargo install cargo-zigbuild
+#    cargo zigbuild --release -p snapfind-indexd -p snapfind-cli --target aarch64-unknown-linux-musl
+# 2) 桌面端：dotnet publish -c Release -r linux-x64|linux-arm64 --self-contained true -p:AssemblyName=SnapFind
+# 3) 图标：python scripts/make_icon.py dist/linux-x64/snapfind.png（纯 stdlib，无 PIL 依赖）
+# 4) 打包：python scripts/make-deb.py --src dist/linux-x64 --arch amd64 --version <ver> ...
+#    （纯 Python 组装 ar/tar，产出符合 Debian Policy 的 .deb，含菜单/图标/桌面快捷方式安装脚本）
+
 ```
 
-跨平台产物说明：Linux 主程序在发布时以 `-p:AssemblyName=SnapFind` 生成（apphost 按文件名找同名 dll，不能事后改名），因此包内文件为 `SnapFind` + `SnapFind.dll`；Linux 还会由 `scripts/make-deb.py` 额外产出 deb 包。
+跨平台产物说明：Linux 主程序在发布时以 `-p:AssemblyName=SnapFind` 生成（apphost 按文件名找同名 dll，不能事后改名），因此包内文件为 `SnapFind` + `SnapFind.dll`；Linux 还会由 `scripts/make-deb.py` 额外产出 deb 包（纯 Python 组装，无需 dpkg 环境）。
 
-测试现状：`cargo test` 全绿——`snapfind-engine` 集成测试含端到端检索、分段整理、降级、排除规则持久化，外加「扫描与查询并发压测」；`snapfind-indexd` 有真实进程驱动的 IPC 冒烟链路测试；桌面端 xUnit 23 例（`dotnet test`，覆盖配置读写、格式化、进度状态机）。
+测试现状：`cargo test` 全绿——`snapfind-engine` 集成测试含端到端检索、分段整理、降级、排除规则持久化，外加「扫描与查询并发压测」，抽取器单测 34 例（Office 容器魔数路由、ODF、容器不符、纯文本补充）；`snapfind-indexd` 有真实进程驱动的 IPC 冒烟链路测试；桌面端 xUnit 23 例（`dotnet test`，覆盖配置读写、格式化、进度状态机）。
 
 ---
 

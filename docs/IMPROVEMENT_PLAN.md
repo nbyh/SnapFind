@@ -15,6 +15,8 @@
 | 静默失败 | Rust 侧 `let _ =` 吞错密集（IPC 发送、线程 spawn、watch 注册、增量写入、`cfg.save`）；C# 侧设置页 `Save()` 无 try，磁盘只读/满会直接抛到 UI 事件 |
 | 性能 | 全局单 `Mutex<Store>`：搜索、扫描写、`compact`（可达数十秒）、`stats()`（UI 100ms 轮询）全串行；`build_exclude_set` 每批变更都读一次磁盘 |
 | 工程 | 桌面端零测试、indexd/cli/ipc-client 零测试；无统一日志（Rust）、无崩溃上报；版本号 `0.1.0` vs `1.0.0` 不一致；Windows 未签名、Linux 无安装脚本与图标 |
+
+> **2026-11-17 更新**：上表为 v0.2 体检快照。其中「Linux 无安装脚本与图标」「版本号不一致」已在后续批次核销（见实施进度 R5-*）；Linux 支持本体、deb 发布链路与排除规则统一也已落地。
 | 文档 | README 仍描述已删除的 Rust GUI（`snapfind-gui`/eframe），架构图、目录树与现状不符 |
 
 ---
@@ -44,6 +46,12 @@
 | R4-1 版本号统一 | ✅ 2026-11-10 | Cargo workspace 与 `Directory.Build.props` 统一 0.2.0；关于页/导航栏读程序集版本；manifest 带版本 |
 | R4-2 测试补齐 | ✅ 2026-11-10 | 桌面端 `SnapFind.Desktop.Tests`（23 用例：AppConfig 读写不丢键/未知键保留/损坏提示、Format、进度卡片状态机含 5s 宽限与暂停保值，`SNAPFIND_CONFIG` 隔离）；**indexd 冒烟链路** `crates/snapfind-indexd/tests/ipc_smoke.rs`（真实进程：启动→hello→scope.preview→scope.register→index.start→stats 轮询→query.execute 命中/零命中→shutdown，2.2s）；**并发压测** `crates/snapfind-engine/tests/concurrency_smoke.rs`（扫描中并行查询+stats，8s 通过）。踩坑记录：文档必须放 `target/tmp`，`%TEMP%` 命中默认排除 `**\AppData\Local\Temp\**` |
 | R4-3 发布工程 | ✅ 2026-11-10 | `SHA256SUMS.txt`（GNU 兼容格式）；zigHome 由 python 推导；publish 失败回显真实错误；dist 清理改逐文件；Linux 包附 `install.sh`（装到 `~/.local/opt/snapfind` + 注册应用菜单）与 `snapfind.png`（构建时 GDI+ 生成）`.desktop` 模板补 `Icon=` |
+| R5-1 Linux 平台支持 | ✅ 2026-11-14 | IPC 改用 Unix Domain Socket；单实例/托盘跨平台降级；首启引导按平台预填排除范围；主程序发布命名 `SnapFind`（freedesktop 不把无后缀大写名当启动器配置）；Linux 暂无开机自启（开关隐藏） |
+| R5-2 Linux 发布链路（deb/图标/快捷方式） | ✅ 2026-11-15 | `scripts/make-deb.py` 纯 Python 组装 ar/tar 产出 Debian Policy 合规 deb（含 postinst/postrm）；图标改主题名引用 `Icon=snapfind` + `gtk-update-icon-cache`；桌面快捷方式按 `xdg-user-dir DESKTOP` 落点（适配本地化 `~/桌面`）；修图标 PNG 两处生成 bug（透明像素缺字节致扫描线错位、圆角 SDF 误判）与 ar 头 mode 字段（八进制误写十进制）；`install.sh` 同步支持图标安装与桌面快捷方式 |
+| R5-3 排除规则统一与预设精简 | ✅ 2026-11-15 | 设置页/引导共用单一 glob 编辑器；`exclude_paths` 幂等迁移（Linux 丢弃 Windows 片段并清污染 glob、Windows 转任意盘符）；预设只列 Rust 内置默认（`platform::default_excludes`）之外的按平台增量项；启动迁移去重（镜像内置清单 `ExcludePresets.BuiltInDefaults`）；实测用户配置从 23 条冗余清理为空 |
+| R5-4 版本号统一 2.0.0 | ✅ 2026-11-17 | Cargo workspace / `Directory.Build.props` / 主界面关于页一致；`snapfind --version`、`snapfind-indexd --version` 输出同版本 |
+| R5-5 抽取格式扩展 2.0.0 | ✅ 2026-11-17 | OOXML 模板宏变体（dotm/xltx/xltm/ppsm/potx）、ODF 全家桶（odt/ods/odp/ott/ots/otp/odg，content.xml 裸字符数据）、纯文本补充（tex/bib/rst/adoc/org/srt/ass/vtt/lrc/ics/vcf/eml/diff/patch）；Office 容器魔数二次识别（zip/OLE2/PDF），改名/伪装扩展名不再走错管线；抽取器单测 27→34 |
+| R5-6 Linux 交叉构建 | ✅ 2026-11-15 | arm64 引擎用 `cargo-zigbuild` + `aarch64-unknown-linux-musl` 静态链接（pip 装 zig 0.13）；桌面端 .NET 8 自包含 `-r linux-arm64`；`scripts/make-deb.py --arch arm64` 产出 arm64 deb；发布经 GitHub API（设备码授权）上传资产 |
 
 ---
 

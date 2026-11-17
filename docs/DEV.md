@@ -718,7 +718,7 @@ UI 崩溃/被强杀 → Job Object（Win）/ PDEATHSIG（Linux）毫秒级终止
 | 自身 | `<索引目录>/**`（必须排除，防自索引） |
 | 重解析点 | 默认不跟随（防环），可在设置开启 |
 
-**设置页的索引排除（当前实现）**：`index.excludePaths` 是「路径片段」列表（大小写不敏感，路径中任意位置包含即整棵子树剪枝），默认含 `$Recycle.Bin`、`RECYCLER`、`System Volume Information`，因此**任意盘符**的回收站都会跳过，而不只 `C:`；`index.excludeTypes` 是扩展名列表（不含点），命中即不建立索引。二者在「设置 → 索引排除」中编辑，保存在便携 `config.json`，索引进程在每次扫描 / 增量批次开始时重读，无需重启即生效，并与 `index.excludeRules`（范围确认页的 glob/前缀规则）叠加生效。
+**设置页的索引排除（当前实现，2.0.0）**：设置页与首次引导共用**单一 glob 规则编辑器**（`index.excludeRules`）；`index.excludePaths`（旧「路径片段」）已废弃——启动时幂等迁移：**自定义**片段转为等价 glob（`**/片段/**` 与 `**/片段`，按平台分隔符）并入规则后清空字段；遗留 Windows 概念片段（`$Recycle.Bin`/`RECYCLER`/`System Volume Information`）在 **Linux 直接丢弃**（并清理早期迁移误生成的对应 glob），在 **Windows 转为任意盘符 glob**（内置默认只覆盖 `C:`，任意盘符形态仍有价值）。`index.excludeTypes` 仍为扩展名列表，命中即不建立索引。Rust 内置平台默认排除（`platform::default_excludes`，见上两表）扫描时**自动叠加**且不写入配置；C# 侧镜像内置清单（`ExcludePresets.BuiltInDefaults`），启动迁移时清掉用户规则中与内置重复或平台错位的项。设置页/引导页的排除预设只列**内置没有的按平台增量项**（Windows：任意盘符回收站、`.svn`/`.hg`/`.pytest_cache`/`.m2`/`obj`、`*.vmdk` 等；Linux：`/var/tmp`/`/var/log`/`flatpak`/`snapd` 等），避免出现勾了也没效果的重复规则。
 
 **Linux 默认排除**
 
@@ -887,20 +887,25 @@ UI 崩溃/被强杀 → Job Object（Win）/ PDEATHSIG（Linux）毫秒级终止
 
 | 类型 | 扩展名 | 抽取方式 | 惰性加载 | 依赖 | 备注 |
 | --- | --- | --- | --- | --- | --- |
-| 纯文本 | `.txt` `.text` `.log` `.csv` `.tsv` `.ini` `.cfg` `.conf` `.toml` `.yaml` `.yml` `.json` `.xml` | 字节流读取 + 编码探测（UTF-8/UTF-16/GBK/latin1） | 否 | 无 | 无上限内全量 |
+| 纯文本 | `.txt` `.text` `.log` `.csv` `.tsv` `.ini` `.cfg` `.conf` `.toml` `.yaml` `.yml` `.json` `.xml` `.diff` `.patch` | 字节流读取 + 编码探测（UTF-8/UTF-16/GBK/latin1） | 否 | 无 | 无上限内全量 |
 | 代码 | `.rs` `.py` `.js` `.ts` `.tsx` `.jsx` `.go` `.c` `.h` `.cpp` `.hpp` `.java` `.kt` `.cs` `.rb` `.php` `.swift` `.sh` `.ps1` `.sql` | 同纯文本 | 否 | 无 | 分词按标识符规则（`snake_case`/`camelCase` 拆分） |
+| 学术/轻量标记 | `.tex` `.bib` `.rst` `.adoc` `.org` | 同纯文本 | 否 | 无 | LaTeX 保留命令文本，`bib` 条目可按 `@type{key,` 段检索 |
+| 字幕 | `.srt` `.ass` `.vtt` `.lrc` | 同纯文本（`ass` 剥离节/样式行） | 否 | 无 | 时间轴行参与分词但通常无命中意义 |
+| 日历/联系人/邮件 | `.ics` `.vcf` `.eml` | 同纯文本（头字段 `SUMMARY/FN/SUBJECT` 等与正文均索引） | 否 | 无 | MIME 多部分 `eml` 取可文本段 |
 | 日志 | `.log` 及无扩展名大文本 | 同纯文本（流式，尾部优先） | 否 | 无 | 支持超大文件分块 |
 | Markdown | `.md` `.markdown` | 剥离语法标记后索引（保留标题与正文） | 否 | 自研（可选 `pulldown-cmark`） | 标题字段加权 |
 | HTML | `.html` `.htm` `.xhtml` | 抽 `<title>`/`<meta>` 与正文，剔除 script/style | 否 | 自研 tokenizer（可选 `scraper`） | 不执行 JS |
 | RTF | `.rtf` | 轻量 RTF 解析（控制字、`\ansicpg`、`\uN` 转义、跳过 `\bin`） | 否 | 自研 | 不支持嵌入 OLE 对象内容 |
 | PDF | `.pdf` | 文本层抽取（ToUnicode CMap → Unicode） | **是** | 见 §6.4 | 加密/无文本层 → 记录，可触发 OCR 插件（默认关） |
-| DOCX | `.docx` `.dotx` | ZIP + `word/document.xml`（`w:t`），含页眉页脚可选 | **是** | `zip` + `quick-xml` | 老式 `.doc` 见下方「旧二进制 Office」 |
-| XLSX | `.xlsx` `.xlsm` | ZIP + `xl/sharedStrings.xml` + `xl/worksheets/*.xml` | **是** | `zip` + `quick-xml` | 老式 `.xls` 见下方 |
-| PPTX | `.pptx` `.ppsx` | ZIP + `ppt/slides/slide*.xml`（`a:t`） | **是** | `zip` + `quick-xml` | 老式 `.ppt` 见下方 |
+| OOXML | `.docx` `.dotx` `.dotm`（Word）／`.xlsx` `.xlsm` `.xltx` `.xltm`（Excel）／`.pptx` `.ppsx` `.ppsm` `.potx`（PowerPoint） | ZIP + 部件 XML（`w:t` / `sharedStrings`+`worksheets` / `a:t`），含页眉页脚可选 | **是** | `zip` + `quick-xml` | 模板/宏变体与正文管线相同；老式 `.doc/.xls/.ppt` 见下方「旧二进制 Office」 |
+| ODF | `.odt` `.ods` `.odp` `.ott` `.ots` `.otp` `.odg` | ZIP + `content.xml` 裸字符数据提取（跳过标签间属性） | **是** | `zip` + `quick-xml` | LibreOffice / OpenOffice 全家桶 |
+| WPS Office | `.wps` `.et` `.dps` 及模板变体 | 新版 WPS 实为 zip 容器 → 走 OOXML 同款部件抽取；老式 WPS 二进制 → OLE2 兜底 | **是** | `zip` + `quick-xml` | 与 Office 一致按**容器魔数二次识别**路由 |
 | EPUB | `.epub` | ZIP + OPF 清单顺序 + XHTML 文本 | **是** | `zip` + `quick-xml` | DRM 加密 → `ERR_EXTRACT_ENCRYPTED` |
 | 其他/未知 | — | 仅索引文件名与路径 | 否 | 无 | 可开启「前 8KB 可打印文本启发式」（默认关） |
 | OCR（插件） | 图像 `.png` `.jpg` `.tif` / 扫描 PDF | 可选插件，**默认不启用** | 是 | 见 §6.4 | 独立动态库，缺失即禁用 |
-| 旧二进制 Office | `.doc` `.dot` `.xls` `.xlt` `.ppt` `.pps` `.pot` | `ole_text()`：连续可打印 ASCII（≥6 字节）+ 未被覆盖的 UTF-16LE 可打印片段（ASCII/CJK/中文标点/全角）兜底抽取 | 否 | 自研 | 输出无排版纯文本，可预览也可全文检索；二进制垃圾不会进入正文 |
+| 旧二进制 Office | `.doc` `.dot` `.xls` `.xlt` `.ppt` `.pps` `.pot` | `ole_text()`：连续可打印 ASCII（≥6 字节）+ 未被覆盖的 UTF-16LE 可打印片段（ASCII/CJK/中文标点/全角）兜底抽取（第二遍 O(n) 区间覆盖判断） | 否 | 自研 | 输出无排版纯文本，可预览也可全文检索；二进制垃圾不会进入正文 |
+
+**容器魔数二次识别（2.0.0）**：Office 家族（OOXML/ODF/WPS-zip/EPUB = zip 容器，旧 Office = OLE2，PDF = `%PDF-`）在按扩展名路由前先嗅探文件头魔数，容器不符时改路由到正确管线或明确报错——`.docx` 改名 `.doc`、新版 WPS 把 `.wps` 存成 zip、伪装扩展名的 PDF 都不会走错抽取管线。
 
 ### 6.2 统一接口
 
@@ -1875,7 +1880,7 @@ jobs:
 | `index.mergeHotSegments` | int | 8 | 2–64 | 热段数达阈值合并 |
 | `index.segmentTargetBytes` | int | 67108864 | 16MiB–256MiB | 冷段目标大小 |
 | `index.excludeRules` | string[] | 平台默认（§5.4） | glob/前缀 | 追加排除规则 |
-| `index.excludePaths` | string[] | `$Recycle.Bin` / `RECYCLER` / `System Volume Information` | 路径片段 | 路径中包含即跳过（任意盘符，大小写不敏感） |
+| `index.excludePaths` | string[] | —（**已废弃**，配置 v2 移除） | 路径片段 | 旧机制：启动时自定义片段幂等迁移为 glob 并清空；遗留 Windows 片段在 Linux 丢弃、Windows 转任意盘符 glob |
 | `index.excludeTypes` | string[] | `[]` | 扩展名 | 命中即不建立索引 |
 | `index.followSymlinks` | bool | false | — | 是否跟随符号链接/重解析点 |
 | `index.dailyScan` | bool | false | — | 每日定时增量索引（到点对已完成卷重扫一遍，未变更文件只 stat） |
