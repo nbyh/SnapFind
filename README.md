@@ -7,7 +7,7 @@
 - 界面：.NET 8 + Avalonia 原生绘制（无 Web/HTML 前端、无内嵌浏览器），WinUI/Fluent 风格，深浅主题
 - 关闭界面即关闭索引进程（落检查点后退出），不驻留后台
 
-> 当前为 **v0.1 可运行内核**。功能清单见[特性](#特性)，配置生效时机见[配置参考](#配置参考)，已知问题见[已知限制与已知问题](#已知限制与已知问题)，改进路线见 [`docs/IMPROVEMENT_PLAN.md`](docs/IMPROVEMENT_PLAN.md)。设计基线见 [`docs/DEV.md`](docs/DEV.md)。
+> 当前版本 **v1.0.0**。功能清单见[特性](#特性)，安装与使用见[快速开始](#快速开始)，配置生效时机见[配置参考](#配置参考)，已知问题见[已知限制与已知问题](#已知限制与已知问题)，设计基线见 [`docs/DEV.md`](docs/DEV.md)。
 
 ---
 
@@ -32,7 +32,7 @@
 | 资源控制 | ✅ | IO 节流（令牌桶，四档）+ 内存分级降级（L0/L1/L2）+ 分段整理（compact） |
 | 桌面端 | ✅ | 搜索 / 索引 / 设置三页、预览面板与标尺、系统托盘、全局热键 `Ctrl+Alt+F`、单实例、开机自启 |
 | 无网络 / 无遥测 | ✅ | 默认构建无 HTTP 依赖；索引、配置、日志全部本地 |
-| 正则 / 模糊匹配 | ⚠️ | 预留开关，v0.1 执行时降级为普通关键词并给出 warning |
+| 正则 / 模糊匹配 | ⚠️ | 预留开关，当前执行时降级为普通关键词并给出 warning |
 | OCR | ❌ | 未实现（默认关闭，与设计文档一致） |
 
 ---
@@ -61,6 +61,16 @@
 
 ### Linux
 
+**方式一：deb 包（Debian / Ubuntu 推荐）**
+
+```bash
+sudo dpkg -i SnapFind-linux-x64.deb   # arm64 设备用 arm64 包
+```
+
+自动安装到 `/opt/snapfind` 并注册应用菜单与图标；卸载 `sudo dpkg -r snapfind`。
+
+**方式二：tar.gz 手动解压**
+
 ```bash
 tar xzf SnapFind-linux-x64.tar.gz
 cd linux-x64
@@ -79,7 +89,7 @@ sudo apt install libx11-6 libxrandr2 libxi6 libxcursor1 libice6 libsm6 libfontco
 sudo dnf install libX11 libXrandr libXi libXcursor libICE libSM fontconfig
 ```
 
-放进应用菜单：包内附 `snapfind.desktop.template`，把 `Exec=` / `Path=` 改成实际解压路径后复制到 `~/.local/share/applications/snapfind.desktop`（图标安装脚本见路线图 `docs/IMPROVEMENT_PLAN.md` R4-3）。
+放进应用菜单：执行包内 `./install.sh` 一键安装到 `~/.local/opt/snapfind` 并注册菜单项；不想用脚本时也可手动改 `snapfind.desktop.template` 里的 `Exec=` / `Path=` 后复制到 `~/.local/share/applications/snapfind.desktop`。
 
 > 纯终端 / SSH 环境没有图形会话，无法启动界面；请用 `snapfind` 命令行。
 
@@ -251,13 +261,14 @@ dotnet build SnapFind.Desktop/SnapFind.Desktop.csproj
 dotnet run   --project SnapFind.Desktop
 
 # 四平台发布包（Windows x64/ARM64、Linux x64/ARM64，无 macOS）
-./build-release.ps1              # 产物在 dist/
-./build-release.ps1 -Only win-x64
+# 产物：zip / tar.gz / .deb（Linux）+ SHA256SUMS.txt，全部在 dist/
+./build-release.ps1
+./build-release.ps1 -Only win-x64     # 只构建某平台（增量调试用）
 ```
 
-跨平台产物说明：Linux 主程序在发布时以 `-p:AssemblyName=SnapFind` 生成（apphost 按文件名找同名 dll，不能事后改名），因此包内文件为 `SnapFind` + `SnapFind.dll`。
+跨平台产物说明：Linux 主程序在发布时以 `-p:AssemblyName=SnapFind` 生成（apphost 按文件名找同名 dll，不能事后改名），因此包内文件为 `SnapFind` + `SnapFind.dll`；Linux 还会由 `scripts/make-deb.py` 额外产出 deb 包。
 
-测试现状（诚实标注）：`snapfind-engine` 有 3 个集成测试；`snapfind-indexd`、`snapfind-ipc-client`、`snapfind-cli` **尚无测试**；桌面端**无测试工程**。补齐计划见路线图 R4-2。
+测试现状：`cargo test` 全绿——`snapfind-engine` 集成测试含端到端检索、分段整理、降级、排除规则持久化，外加「扫描与查询并发压测」；`snapfind-indexd` 有真实进程驱动的 IPC 冒烟链路测试；桌面端 xUnit 23 例（`dotnet test`，覆盖配置读写、格式化、进度状态机）。
 
 ---
 
@@ -270,7 +281,7 @@ dotnet run   --project SnapFind.Desktop
 | 查询超时 | `query.timeout_ms` 只影响「耗时超预算」提醒，不中止检索；桌面端看门狗 = 预算 × 3 且 ≥ 10 秒，预算在设置页可改并即时生效 |
 | 正则 / 模糊 | 未实现，降级为关键词并提示 |
 | OCR | 未实现 |
-| 发布包 | Windows 未签名（Authenticode 需证书，暂缓）；已提供 `SHA256SUMS.txt` 校验和、Linux `install.sh` 与 256×256 图标（R4-3） |
+| 发布包 | Windows 未签名（Authenticode 需证书，暂缓）；已提供 `SHA256SUMS.txt` 校验和；Linux 提供 deb 安装包（自动注册应用菜单）与 tar.gz（含 `install.sh`） |
 
 ---
 
@@ -299,16 +310,16 @@ dotnet run   --project SnapFind.Desktop
 
 ---
 
-## 路线图
+## 排障与日志
 
-按优先级推进的任务清单、验收标准与工作量估算见 [`docs/IMPROVEMENT_PLAN.md`](docs/IMPROVEMENT_PLAN.md)：
+索引与崩溃日志统一落在 `<索引目录>/logs/`，排障只需看这一个目录：
 
-1. **P0** 配置写入唯一化、`RestoreDefaultExcludes` 补同步、死配置清理与迁移、关键静默失败补提示；
-2. **P1** 设置页补齐生效时机标注与「重启索引服务」、索引目录切换善后、三处超时统一、把节流/内存预算/去抖暴露到界面；
-3. **P2** 拆 `store` 全局锁、排除集缓存、进度与 stats 竞争修复；
-4. **P3/P4** 日志与崩溃上报、Linux 图标、国际化底座、版本号统一、测试补齐、发布工程（签名 / SHA256 / Linux 安装脚本）。
+| 文件 | 内容 |
+| --- | --- |
+| `indexd.log` | 索引进程 stderr（含启动标记 `start v<版本> index_root=...`），10MB 轮转一代（`.old`） |
+| `panic.log` | 索引进程崩溃兜底（时间戳、线程名、panic 信息） |
 
-> 2026-11-10：P0～P4 除「拆锁」（前置并发压测已补齐，等 store 重构）、「国际化底座」、部分无障碍（Avalonia 无 Button 级 AccessKey）与「Authenticode 签名」外均已落地；版本统一为 **0.2.0**；测试：桌面端 xUnit 23 例（`dotnet test`）+ indexd IPC 冒烟链路 + 扫描/查询并发压测（`cargo test`）。日志统一落 `<index>/logs/`：`indexd.log`（indexd stderr，10MB 轮转）、`panic.log`（崩溃）。
+桌面端崩溃日志在 `%TEMP%\snapfind-crash.log`（UI/未观测任务异常均记录，UI 线程异常不闪退）。
 
 ---
 
