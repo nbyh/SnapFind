@@ -85,7 +85,7 @@ public static class Format
         return Brushes.Gray;
     }
 
-    /// <summary>扩展名 -> 类别色（与 views.rs::ext_color 一致）。</summary>
+    /// <summary>扩展名 -> 类别色：固定配色方案（文档蓝 / 表格绿 / 演示橙 / PDF 红…），本侧自有实现。</summary>
     public static Color ExtColor(string ext)
     {
         var e = (ext ?? "").TrimStart('.').ToLowerInvariant();
@@ -138,7 +138,9 @@ public static class Format
 
     /// <summary>
     /// 从查询串切出用于正文高亮的词：按非字母数字切分，保留长度 ≥2，
-    /// ASCII 转小写（与 Rust 侧 <c>views::query_terms</c> 一致）。
+    /// ASCII 转小写。GUI 本地简化实现；服务端真正的高亮词提取在
+    /// Rust <c>query.rs::query_needles</c>（去语法符号 + query_tokens 分词），
+    /// 两侧规则不要求一致：本地版只做结果卡高亮，命中判定以服务端为准。
     /// </summary>
     public static IReadOnlyList<string> Terms(string? query)
     {
