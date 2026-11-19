@@ -20,6 +20,7 @@ public abstract class ConfigIsolatedTest : IDisposable
     public void Dispose() => Environment.SetEnvironmentVariable("SNAPFIND_CONFIG", null);
 }
 
+[Collection("ConfigIsolated")]
 public class AppConfigTests : ConfigIsolatedTest
 {
     [Fact]

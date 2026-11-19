@@ -22,6 +22,8 @@ public sealed partial class ShellViewModel : ObservableObject
     private bool _forceQuit;
     private int _statsSeq;
     private int _reconnecting;
+    private Task? _reconnectTask;
+    private DateTime? _lastPollUtc;
 
     public ShellViewModel(AppConfig config, SingleInstance? instance)
     {
@@ -322,20 +324,35 @@ public sealed partial class ShellViewModel : ObservableObject
     /// 旧进程持有的索引目录文件锁要等进程退出才释放，因此前几次重试
     /// 可能遇到「启动后立即退出」，属预期，由退避重试吸收。
     /// </summary>
-    public async Task ReconnectAsync()
+    public Task ReconnectAsync()
+    {
+        // 已有重连在跑时返回同一个 Task：用户点「重试」能等到这一轮真正结束，
+        // 而不是被防重入静默忽略（表现为点了没反应）。
+        if (_reconnectTask is { IsCompleted: false } running) return running;
+        var task = ReconnectCoreAsync();
+        _reconnectTask = task;
+        return task;
+    }
+
+    private async Task ReconnectCoreAsync()
     {
         if (Interlocked.CompareExchange(ref _reconnecting, 1, 0) != 0) return;
         try
         {
-            SetNotice("索引服务已断开，正在重启索引进程…");
+            SetNotice("索引服务不可用，正在重启索引进程并重新通信…");
             var lastError = "";
             for (var attempt = 1; attempt <= 5; attempt++)
             {
                 await Task.Delay(TimeSpan.FromSeconds(attempt));
                 try
                 {
+                    // 无条件换掉旧连接：IsAlive 只看子进程是否退出，睡眠恢复后
+                    // 子进程还活着但管道/状态已僵死时必须主动重启。
                     if (_client is not null)
                     {
+                        // 先给一次优雅退出的机会（落检查点），连接已僵死时超时后
+                        // ShutdownAsync/DisposeAsync 会强杀进程树，再重新拉起。
+                        try { await _client.ShutdownAsync(2000); } catch { /* 僵死连接 */ }
                         await _client.DisposeAsync();
                         _client = null;
                     }
@@ -343,9 +360,20 @@ public sealed partial class ShellViewModel : ObservableObject
                     _client = client;
                     HookClient(client);
                     _pollTimer.Start();
+                    // 旧进程留下的范围行/进度卡可能含重复卷 ID：先清空再从新进程
+                    // 重建，否则刷新又会因 same-key 异常失败，形成「重试死循环」。
+                    Index.ResetForReconnect();
+                    var ok = await Task.WhenAll(RefreshScopeAsync(), RefreshStatsAsync());
+                    if (!ok[0] || !ok[1])
+                    {
+                        // 进程起来了但握手后的首次通信仍失败：继续下一轮重启，
+                        // 不让用户反复点「重试」。
+                        lastError = Index.ScopeError;
+                        Helpers.Log.Write($"reconnect attempt {attempt} handshake ok but refresh failed: {lastError}");
+                        continue;
+                    }
                     Index.ScopeError = "";
                     Index.HasScopeError = false;
-                    await Task.WhenAll(RefreshScopeAsync(), RefreshStatsAsync());
                     SetNotice("索引服务已重新连接。");
                     return;
                 }
@@ -387,6 +415,21 @@ public sealed partial class ShellViewModel : ObservableObject
 
     private void Poll()
     {
+        // 睡眠/休眠恢复检测：挂起期间 DispatcherTimer 不触发，恢复后第一个 tick
+        // 与上次 tick 之间会有明显时间跳跃。此时 IPC 管道常处于半死状态（子进程
+        // 还活着所以 IsAlive=true，但请求/事件流已僵死），主动重启一轮索引进程，
+        // 等它起来后重新拉 scope/stats——这正是该错误最常见的触发场景。
+        var now = DateTime.UtcNow;
+        if (_lastPollUtc is { } last && now - last > TimeSpan.FromSeconds(60)
+            && _client is not null && !_forceQuit)
+        {
+            Helpers.Log.Write($"resume after suspend (gap {(now - last).TotalSeconds:F0}s) -> restart indexd");
+            SetNotice("检测到系统从睡眠恢复，正在重启索引进程并重新通信…");
+            _ = ReconnectAsync();
+            return;
+        }
+        _lastPollUtc = now;
+
         if (Instance is { } inst && inst.Poll() is { } intent)
         {
             switch (intent)
@@ -403,7 +446,8 @@ public sealed partial class ShellViewModel : ObservableObject
             }
         }
 
-        if (_client is null) return;
+        // 重连进行中不要消费旧连接的残留事件，也不要用半死连接发统计请求
+        if (_client is null || Volatile.Read(ref _reconnecting) != 0) return;
         while (_client.TryNextEvent(out var env)) HandleEvent(env);
 
         if (_pendingStatsAt is { } at && DateTime.UtcNow >= at)

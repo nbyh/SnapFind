@@ -281,16 +281,27 @@ public sealed partial class IndexViewModel : ObservableObject
             .Where(r => r.Selected)
             .Select(r => r.VolumeId)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var previousState = Rows.ToDictionary(
-            r => r.VolumeId,
-            r => (r.StateText, r.StateBrushKey, r.StateBrush, r.DocsText, r.RowState),
+        // 不能用 Rows.ToDictionary：睡眠恢复后后端偶发重复卷 ID 会让 Rows 出现重复键，
+        // 下一次刷新就抛 "An item with the same key has already been added"（被外层
+        // 误报成「索引服务不可用」）。用索引器构建，重复键覆盖即可，永远不会抛。
+        var previousState = new Dictionary<string,
+            (string StateText, string StateBrushKey, IBrush StateBrush, string DocsText, string RowState)>(
             StringComparer.OrdinalIgnoreCase);
+        foreach (var r in Rows)
+        {
+            previousState[r.VolumeId] =
+                (r.StateText, r.StateBrushKey, r.StateBrush, r.DocsText, r.RowState);
+        }
 
         Rows.Clear();
         if (scope is null) return;
 
+        // 后端数据本身也做一次兜底去重：同一 VolumeId 只保留第一行
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var v in scope.Volumes)
         {
+            if (!seen.Add(v.VolumeId)) continue;
+
             var row = new VolumeRow
             {
                 VolumeId = v.VolumeId,
@@ -402,6 +413,23 @@ public sealed partial class IndexViewModel : ObservableObject
             if (string.IsNullOrEmpty(id)) continue;
             GetOrCreateProgress(id, FindMount(id)).ApplyState("Scanning");
         }
+        OnPropertyChanged(nameof(HasProgress));
+    }
+
+    /// <summary>
+    /// 重启索引进程前清空派生的 UI 状态。旧进程留下的范围行/进度卡可能含重复卷 ID
+    /// 或已失效的挂载点，带着它们去 ApplyScope/ApplyStats 会反复报 same-key 错误；
+    /// 重连成功后由 RefreshScopeAsync / RefreshStatsAsync 从新进程重建。
+    /// </summary>
+    public void ResetForReconnect()
+    {
+        Rows.Clear();
+        ProgressRows.Clear();
+        _progressMap.Clear();
+        ScopeError = "";
+        HasScopeError = false;
+        HasStats = false;
+        UpdateSelectionSummary();
         OnPropertyChanged(nameof(HasProgress));
     }
 
@@ -798,10 +826,15 @@ public sealed partial class IndexViewModel : ObservableObject
         ScopeError = "";
         HasScopeError = false;
         _shell.ClearBootError();
-        // client 已死或从未连上时先重启 indexd，否则下面的刷新永远报「索引进程未运行」
-        if (!await _shell.EnsureConnectedAsync()) return;
-        await _shell.RefreshStatsAsync();
-        await _shell.RefreshScopeAsync();
+        // 旧逻辑只调 EnsureConnectedAsync()：它仅检查子进程是否退出（IsAlive），
+        // 睡眠恢复后 indexd 还活着但连接僵死/状态错乱时会直接返回 true，于是又
+        // 刷一遍旧状态、又抛同样的错——用户点多少次「重试」都一样。
+        // 现在无条件走「重启 indexd → 等新进程握手起来 → 重新拉 scope/stats」：
+        // 先清空旧进程留下的行/卡片，再由 ReconnectAsync 内部 ConnectAsync
+        // （含锁冲突退避重试）等待进程就绪，成功后自动重建页面数据。
+        ResetForReconnect();
+        _shell.SetNotice("正在重启索引进程，等待就绪后重新通信…");
+        await _shell.ReconnectAsync();
     }
 
     public void NotifySelectionChanged() => UpdateSelectionSummary();

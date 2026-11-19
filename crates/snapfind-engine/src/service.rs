@@ -16,7 +16,7 @@ use snapfind_core::ipc::{
 };
 use snapfind_core::volume::{self, VolumeInfo};
 use std::cell::Cell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -436,7 +436,12 @@ impl Service {
             }
         }
         merged.sort_by(|a, b| a.mount.cmp(&b.mount));
-        merged.dedup_by(|a, b| a.volume_id == b.volume_id);
+        // 全局按 volume_id 去重（dedup_by 只能去**相邻**重复）：睡眠恢复后
+        // 同一卷可能以不同挂载点被枚举两次，按 mount 排序后两者并不相邻，
+        // 会漏进 scope.preview，前端把重复行写进字典时抛
+        // "An item with the same key has already been added"。
+        let mut seen = HashSet::new();
+        merged.retain(|v| seen.insert(v.volume_id.clone()));
         *vols = merged.clone();
         merged
     }
