@@ -957,6 +957,7 @@ pub fn extract(reader: &mut dyn ReadSeek, limits: Limits) -> Result<ExtractedTex
 | 长路径 | Windows 使用 `\\?\` 前缀；仍失败 → 记录并跳过 |
 | 编码失败 | 探测失败 → latin1 兜底 + `lossy` 转换；不失败 |
 | 二进制夹杂文本 | 可打印比例阈值（默认 ≥ 0.8）判定；不满足仅索引名称/路径 |
+| 卷库损坏（FTS5 影子表） | 打开卷库时探针读 fts 首叶；报损坏类错误（`vtable constructor failed` / `database disk image is malformed` / `file is not a database` 等）→ 整库重建（与 schema 迁移同路径），随后的扫描自动重新填充；锁/IO 等瞬时错误不删库 |
 | 旧 Office 二进制 | 不索引内容；设置页「支持格式」明示，命中项提示「该格式暂不支持内容检索，可转换为 docx/xlsx/pptx」 |
 | 无文本层 PDF | 标记 `scanned`；OCR 插件启用时交由插件，否则仅索引名称/路径 |
 

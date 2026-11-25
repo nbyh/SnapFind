@@ -263,24 +263,25 @@ impl Store {
             std::fs::create_dir_all(dir.join("segments"))?;
             std::fs::create_dir_all(dir.join("hot"))?;
             std::fs::create_dir_all(dir.join("tmp"))?;
-            let conn = Connection::open(dir.join("docs.db"))?;
-            conn.pragma_update(None, "journal_mode", "WAL")?;
-            conn.pragma_update(None, "synchronous", "NORMAL")?;
-            conn.pragma_update(None, "cache_size", -8192)?;
-            conn.pragma_update(None, "temp_store", "MEMORY")?;
-            // schema 版本检查：v1（正文+分词列在 docs 里）自动清空重建，随后由扫描重新填充
-            let version: i64 = conn
-                .query_row("PRAGMA user_version", [], |r| r.get(0))
-                .unwrap_or(0);
-            if version != SCHEMA_VERSION {
-                let _ = conn.execute_batch(
-                    "DROP TABLE IF EXISTS fts; DROP TABLE IF EXISTS docs;
-                     DROP TABLE IF EXISTS content_blocks;",
-                );
-                let _ = std::fs::remove_dir_all(dir.join("segments"));
-                std::fs::create_dir_all(dir.join("segments"))?;
-            }
-            create_schema(&conn)?;
+            let conn = match open_volume_conn(&dir) {
+                Ok(c) => c,
+                Err(first) => {
+                    if !db_corrupt(&first.to_string()) {
+                        return Err(first);
+                    }
+                    // 自愈：docs.db 损坏（典型报错 "vtable constructor failed: fts"，
+                    // 多因强杀/断电/杀毒软件干扰写坏 FTS5 影子表）。
+                    // 与 schema 版本迁移同路径：整库与分段删除重建，
+                    // 随后的扫描自动重新填充（内容源仍是文件系统，不丢数据）。
+                    eprintln!(
+                        "SnapFind(store): volume db broken ({}), rebuilding {}",
+                        first,
+                        dir.display()
+                    );
+                    nuke_volume_db(&dir)?;
+                    open_volume_conn(&dir)?
+                }
+            };
             let segments = SegmentStore::open(&dir.join("segments"))?;
             let state = load_state(&dir).unwrap_or_default();
             self.volumes.insert(
@@ -686,6 +687,62 @@ impl VolumeStore {
             .conn
             .query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |_| Ok(()));
     }
+}
+
+/// 打开卷数据库：连接参数 + schema 版本迁移 + 建表 + 损坏探针。
+fn open_volume_conn(dir: &Path) -> SnapResult<Connection> {
+    let conn = Connection::open(dir.join("docs.db"))?;
+    conn.pragma_update(None, "journal_mode", "WAL")?;
+    conn.pragma_update(None, "synchronous", "NORMAL")?;
+    conn.pragma_update(None, "cache_size", -8192)?;
+    conn.pragma_update(None, "temp_store", "MEMORY")?;
+    // schema 版本检查：v1（正文+分词列在 docs 里）自动清空重建，随后由扫描重新填充
+    let version: i64 = conn
+        .query_row("PRAGMA user_version", [], |r| r.get(0))
+        .unwrap_or(0);
+    if version != SCHEMA_VERSION {
+        let _ = conn.execute_batch(
+            "DROP TABLE IF EXISTS fts; DROP TABLE IF EXISTS docs;
+             DROP TABLE IF EXISTS content_blocks;",
+        );
+        let _ = std::fs::remove_dir_all(dir.join("segments"));
+        std::fs::create_dir_all(dir.join("segments"))?;
+    }
+    create_schema(&conn)?;
+    // 廉价探针：触发 FTS5 虚表构造并读首个叶子页。影子表损坏（强杀/断电/
+    // 杀毒软件干扰）只在打开期暴露，才能走自愈重建；拖到查询期报
+    // "vtable constructor failed: fts" 用户就只能删索引目录了。
+    // 注意必须传播错误：损坏形态（删行/垃圾覆写）在这里报
+    // SQLITE_CORRUPT_VTAB，被上层 db_corrupt 命中后自愈重建。
+    // 空表返回 0 行是正常的，用 next() 容忍。
+    {
+        let mut stmt = conn.prepare("SELECT name_tok FROM fts LIMIT 1")?;
+        let mut rows = stmt.query([])?;
+        while rows.next()?.is_some() {}
+    }
+    Ok(conn)
+}
+
+/// 是否「库文件损坏」类错误——只对损坏自愈；锁、IO 等瞬时错误不删库。
+fn db_corrupt(msg: &str) -> bool {
+    [
+        "vtable constructor failed",
+        "file is not a database",
+        "database disk image is malformed",
+        "malformed database schema",
+    ]
+    .iter()
+    .any(|m| msg.contains(m))
+}
+
+/// 删除卷库与分段数据（自愈重建）。
+fn nuke_volume_db(dir: &Path) -> SnapResult<()> {
+    for name in ["docs.db", "docs.db-wal", "docs.db-shm"] {
+        let _ = std::fs::remove_file(dir.join(name));
+    }
+    let _ = std::fs::remove_dir_all(dir.join("segments"));
+    std::fs::create_dir_all(dir.join("segments"))?;
+    Ok(())
 }
 
 /// 建立卷内 schema（v2）：元数据表 + 正文块定位表 + contentless 倒排。
